@@ -1,11 +1,17 @@
+#define _DEFAULT_SOURCE 1 /* DT_REG et al */
+
 #include "file.h"
 
+#include <dirent.h>
 #include <ftw.h>
+#include <sys/queue.h>
+#include <sys/types.h>
 
 #include "alloc.h"
 #include "common.h"
 #include "config/mode.h"
 #include "log.h"
+#include "types/path.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)
@@ -220,46 +226,137 @@ file_rm_f(char const *path)
 	return 0;
 }
 
-static int rm_error;
+struct directory_node {
+	char *path;
+	bool visited;
+	TAILQ_ENTRY(directory_node) lh;
+};
 
-static int
-rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
+TAILQ_HEAD(directory_nodes, directory_node);
+
+static void
+ditch_dirnode(struct directory_nodes *nodes, struct directory_node *node)
 {
-	if (remove(fpath) < 0) {
-		rm_error = errno;
-		pr_wrn("Cannot remove '%s': %s", fpath, strerror(rm_error));
-	}
-
-	return 0; /* Remove as much as possible, regardless of error */
+	TAILQ_REMOVE(nodes, node, lh);
+	free(node->path);
+	free(node);
 }
 
 /*
- * rm -rf $path
+ * Similar to nftw().
  *
- * NOT THREAD-SAFE!
+ * It doesn't require you to declare global variables, never chdir()s,
+ * and never opens more than one file descriptor at a time.
+ * This is done at the expense of possibly requiring somewhat more memory.
+ * (One list node and string per directory in the tree, but far less than all
+ * directory nodes will usually be allocated at the same time.)
+ *
+ * Always depth-first, files always traverse before their sibling directories.
  */
+int
+file_nftw(const char *root, nftw_cb cb, void *arg)
+{
+	struct directory_nodes dirnodes; /* Pending dirs */
+	struct directory_node *dirnode, *addend;
+	DIR *dir;
+	struct dirent *file;
+	int type;
+	char *subpath;
+	int error, traversal_error;
+
+	dirnode = pmalloc(sizeof(struct directory_node));
+	dirnode->path = pstrdup(root);
+	dirnode->visited = false;
+
+	TAILQ_INIT(&dirnodes);
+	TAILQ_INSERT_HEAD(&dirnodes, dirnode, lh);
+
+	traversal_error = 0;
+
+	do {
+		dirnode = TAILQ_LAST(&dirnodes, directory_nodes);
+
+		if (dirnode->visited) {
+			error = cb(dirnode->path, DT_DIR, arg);
+			if (error)
+				goto interrupted;
+
+			ditch_dirnode(&dirnodes, dirnode);
+			continue;
+		}
+
+		dir = opendir(dirnode->path);
+		if (!dir) {
+			error = errno;
+			if (error == ENOTDIR) { /* Plausible on root */
+				error = cb(dirnode->path, DT_UNKNOWN, arg);
+				if (error)
+					goto interrupted;
+			} else {
+				pr_wrn("Cannot traverse through %s: %s",
+				    dirnode->path, strerror(error));
+				traversal_error = error;
+			}
+
+			ditch_dirnode(&dirnodes, dirnode);
+			continue;
+		}
+
+		FOREACH_DIR_FILE(dir, file) {
+			if (S_ISDOTS(file))
+				continue;
+
+			subpath = path_join(dirnode->path, file->d_name);
+
+			type = file_type(file, subpath);
+			if (type == DT_DIR) {
+				addend = pmalloc(sizeof(struct directory_node));
+				addend->path = subpath;
+				addend->visited = false;
+				TAILQ_INSERT_TAIL(&dirnodes, addend, lh);
+			} else {
+				error = cb(subpath, type, arg);
+				free(subpath);
+				if (error) {
+					closedir(dir);
+					goto interrupted;
+				}
+			}
+		}
+
+		error = errno;
+		closedir(dir);
+		if (error) {
+			pr_wrn("Cannot traverse through %s: %s",
+			    dirnode->path, strerror(error));
+			traversal_error = error;
+		}
+
+		dirnode->visited = true;
+	} while (!TAILQ_EMPTY(&dirnodes));
+
+	return traversal_error;
+
+interrupted:
+	while (!TAILQ_EMPTY(&dirnodes))
+		ditch_dirnode(&dirnodes, TAILQ_FIRST(&dirnodes));
+	return error;
+}
+
+static int
+rm(const char *path, int type, void *arg)
+{
+	if (((type == DT_DIR) ? rmdir(path) : unlink(path)) < 0)
+		pr_wrn("Cannot remove %s: %s", path, strerror(errno));
+	return 0;
+}
+
+/* rm -rf $path */
 int
 file_rm_rf(char const *path)
 {
-	int error;
-
 	pr_trc("rm -rf %s", path);
-
-	/* TODO (performance) optimize that 32 */
-	rm_error = 0;
-	if (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS) >= 0)
-		return rm_error; /* Happy path */
-
-	error = errno;
-	if (error == ENOTDIR) {
-		/* This can happen in MacOS; try file removal. */
-		if (unlink(path) == 0)
-			return 0; /* Rare happy path */
-		error = errno;
-	}
-
-	pr_wrn("Cannot remove '%s': %s", path, strerror(error));
-	return error;
+	return file_nftw(path, rm, NULL);
 }
 
 /* If @force, don't treat EEXIST as an error. */
@@ -296,6 +393,7 @@ file_mv(char const *from, char const *to)
 	return 0;
 }
 
+/* XXX delete? */
 void
 file_ln(char const *oldpath, char const *newpath)
 {
@@ -383,4 +481,22 @@ cseq_next(struct cache_sequence *seq, char const **id)
 		seq->pathlen++;
 		free(path);
 	} while (true);
+}
+
+int
+file_type(struct dirent *file, char const *filepath)
+{
+	struct stat st;
+
+	if (file->d_type != DT_UNKNOWN)
+		return file->d_type;
+
+	if (lstat(filepath, &st) < 0)
+		return DT_UNKNOWN; // FIXME maybe warning?
+	if (S_ISREG(st.st_mode))
+		return DT_REG;
+	if (S_ISDIR(st.st_mode))
+		return DT_DIR;
+
+	return DT_UNKNOWN; /* Caller doesn't actually care */
 }

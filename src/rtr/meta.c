@@ -269,9 +269,7 @@ __rm_rf(char const *path)
 	int error;
 
 	error = file_rm_rf(path);
-	if (error < 0)
-		pr_wrn("Cannot delete %s: nftw returned %d", path, error);
-	else if (error)
+	if (error)
 		pr_wrn("Cannot delete %s: %s", path, strerror(error));
 }
 

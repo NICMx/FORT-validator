@@ -70,6 +70,7 @@ struct rsync_ctx {
 	struct cache_sequence fbseq;
 };
 
+/* XXX duplicate; see fallback_has_path() */
 static struct cache_file *
 find_path_in_fallbacks(char const *path, struct fallback_ht *fbs)
 {
@@ -139,7 +140,6 @@ index_files(struct cache_mapping *ctx_root, char const *root_path,
 	struct string_arraylist dirs;
 	DIR *dir;
 	struct dirent *file;
-	struct stat st;
 	char *dirpath;
 	char *filepath;
 	int error;
@@ -168,8 +168,7 @@ index_files(struct cache_mapping *ctx_root, char const *root_path,
 
 			filepath = path_join(dirpath, file->d_name);
 
-			// FIXME not supported by all systems
-			switch (file->d_type) {
+			switch (file_type(file, filepath)) {
 			case DT_REG:
 				error = add_file(files, ctx_root, filepath, fbs);
 				if (error) {
@@ -182,22 +181,6 @@ index_files(struct cache_mapping *ctx_root, char const *root_path,
 			case DT_DIR:
 				stral_add(&dirs, filepath);
 				filepath = NULL;
-				break;
-
-			case DT_UNKNOWN:
-				if (lstat(filepath, &st) < 0)
-					break; // FIXME maybe warning?
-				if (S_ISREG(st.st_mode)) {
-					error = add_file(files, ctx_root, filepath, fbs);
-					if (error) {
-						free(filepath);
-						goto cancel;
-					}
-					filepath = NULL;
-				} else if (S_ISDIR(st.st_mode)) {
-					stral_add(&dirs, filepath);
-					filepath = NULL;
-				}
 				break;
 			}
 
@@ -404,15 +387,32 @@ cancel:	free(dst_path);
 	return error;
 }
 
+static int
+rm_if_not_fallbacked(const char *path, int type, void *arg)
+{
+	struct rsync_ctx *ctx = arg;
+
+	if (type == DT_DIR) {
+		if (rmdir(path) == 0)
+			pr_trc("rmdir %s", path);
+		return 0;
+	}
+
+	if (!fallback_has_path(&ctx->fbs, path) && unlink(path) == 0)
+		pr_trc("rm %s", path);
+
+	return 0;
+}
+
 bool
 rsync_cleanup(struct rsync_ctx *ctx)
 {
 	struct cache_file_ref *new, *tmpn;
 
-	/* 1. Delete noncommitted fallbacks */
+	pr_trc("    1. Deleting noncommitted fallbacks");
 	fallbacks_cleanup(&ctx->fbs);
 
-	/* 2. Move all the new/ files to rmt/ */
+	pr_trc("    2. Move all the new/ files to rmt/");
 	if (HASH_COUNT(ctx->new.ht) != 0) {
 		HASH_ITER(hh, ctx->new.ht, new, tmpn)
 			if (commit(ctx, new) != 0)
@@ -420,8 +420,8 @@ rsync_cleanup(struct rsync_ctx *ctx)
 		file_rm_rf(ctx->new_path);
 	}
 
-	/* 3. Delete old unused rmt/ files */
-	/* XXX */
+	pr_trc("    3. Deleting old unused rmt/ files");
+	file_nftw(ctx->remote_path, rm_if_not_fallbacked, ctx);
 
 	return true;
 }

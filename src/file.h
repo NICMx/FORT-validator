@@ -37,6 +37,9 @@ int file_stat_errno(char const *);
 bool file_isreg(char const *);
 bool file_is_valid(char const *, bool);
 
+typedef int (*nftw_cb)(const char *, int, void *);
+int file_nftw(const char *, nftw_cb, void *);
+
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
 int file_mkdir(char const *, bool);
@@ -70,5 +73,7 @@ char *cseq_next(struct cache_sequence *, char const **);
 
 #define S_ISDOTS(file) \
 	(strcmp((file)->d_name, ".") == 0 || strcmp((file)->d_name, "..") == 0)
+
+int file_type(struct dirent *, char const *);
 
 #endif /* SRC_FILE_H_ */

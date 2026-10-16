@@ -97,6 +97,7 @@ struct fallback_ht {
 };
 
 struct fallback *fallback_find(struct fallback_ht *, struct uri const *);
+bool fallback_has_path(struct fallback_ht *, char const *);
 
 struct rpp;
 void fallback_add(struct fallback_ht *, struct uri *, struct rpp *);

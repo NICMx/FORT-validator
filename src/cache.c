@@ -1259,6 +1259,12 @@ cleanup_cache(void)
 	// XXX delete cages that lack nodes
 	// XXX delete nodes that lack indexes
 	// etc
+	/*
+	 * Delete cages that do not have an index
+	 * Delete indexes that do not have a cage
+	 * Delete cages and indexes absent from the table
+	 * Delete table nodes that do not have a corresponding cage+index
+	 */
 }
 
 void
