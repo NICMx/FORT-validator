@@ -700,11 +700,11 @@ rrdpctx_cleanup(struct rrdp_ctx *ctx)
 	if (!ctx)
 		return false;
 
-	pr_trc("Deleting noncommitted fallbacks.");
+	pr_trc("    Deleting noncommitted fallbacks.");
 	TAILQ_FOREACH(session, &ctx->sessions, lh)
 		fallbacks_cleanup(&session->fbs);
 
-	pr_trc("Cleaning up sessions.");
+	pr_trc("    Cleaning up sessions.");
 	cleanup_sessions(ctx);
 
 	return !TAILQ_EMPTY(&ctx->sessions);

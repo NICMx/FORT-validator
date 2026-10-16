@@ -1216,7 +1216,7 @@ cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
 	bool salvage;
 
-	pr_trc("Cleaning up node: %s", node->map.path);
+	pr_trc("  Cleaning up node: %s", node->map.path);
 
 	rm_metadata(node);
 
@@ -1234,12 +1234,160 @@ cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 	}
 
 	if (salvage) {
-		pr_trc("Preserving node.");
+		pr_trc("  Preserving node.");
 		write_metadata(node);
 	} else {
-		pr_trc("Deleting node.");
+		pr_trc("  Deleting node.");
 		file_rm_rf(node->map.path);
 		delete_node(tbl, node, NULL);
+	}
+}
+
+struct cache_cage {
+	char *id;
+	bool has_index;
+	bool has_content;
+	bool has_node;
+	UT_hash_handle hh;
+};
+
+struct cache_cages {
+	struct cache_cage *ht;
+};
+
+static struct cache_cage *
+add_cage(struct cache_cages *cages, char const *id, size_t len)
+{
+	struct cache_cage *result;
+
+	result = pzalloc(sizeof(struct cache_cage));
+	result->id = pstrndup(id, len);
+	HASH_ADD_KEYPTR(hh, cages->ht, result->id, len, result);
+
+	return result;
+}
+
+static void
+ditch_cage(struct cache_cages *cages, struct cache_cage *cage)
+{
+	HASH_DEL(cages->ht, cage);
+	free(cage->id);
+	free(cage);
+}
+
+static char *
+get_index_path(char const *root, char const *id)
+{
+	char *result;
+	size_t len;
+
+	len = strlen(root) + strlen(id) + 7;
+	result = pmalloc(len);
+
+	if (snprintf(result, len, "%s/%s.json", root, id) >= len)
+		pr_panic("Bad snprintf!");
+
+	return result;
+}
+
+static void
+clean_orphaned_cages(struct cache_table *tbl)
+{
+	DIR *dir;
+	struct dirent *file;
+	struct cache_cages cages;
+	struct cache_cage *cage, *tmp;
+	char *period, *path;
+	size_t len;
+	int error;
+
+	if (!tbl->enabled)
+		return;
+
+	dir = opendir(tbl->name);
+	if (!dir) {
+		error = errno;
+		if (error == ENOENT)
+			return;
+		pr_err("Cannot open directory %s for cleanup: %s",
+		    tbl->name, strerror(error));
+		return;
+	}
+
+	cages.ht = NULL;
+
+	FOREACH_DIR_FILE(dir, file) {
+		if (S_ISDOTS(file))
+			continue;
+
+		period = strchr(file->d_name, '.');
+		if (period) {
+			if (strcmp(period + 1, "json") != 0) {
+				path = path_join(tbl->name, file->d_name);
+				file_rm_rf(path);
+				free(path);
+				continue;
+			}
+
+			len = period - file->d_name;
+			HASH_FIND(hh, cages.ht, file->d_name, len, cage);
+			if (!cage)
+				cage = add_cage(&cages, file->d_name, len);
+			cage->has_index = true;
+			pr_trc("  %s has index.", cage->id);
+
+		} else {
+			len = strlen(file->d_name);
+			HASH_FIND(hh, cages.ht, file->d_name, len, cage);
+			if (!cage)
+				cage = add_cage(&cages, file->d_name, len);
+			cage->has_content = true;
+			pr_trc("  %s has content.", cage->id);
+		}
+	}
+
+	error = errno;
+	closedir(dir);
+	if (error) {
+		pr_err("Directory traversal interrupted: %s", strerror(error));
+		HASH_ITER(hh, cages.ht, cage, tmp)
+			ditch_cage(&cages, cage);
+		return;
+	}
+
+	/* TODO (fine) slow */
+	HASH_ITER(hh, cages.ht, cage, tmp) {
+		struct cache_node *node, *tmpn;
+
+		path = path_join(tbl->name, cage->id);
+
+		HASH_ITER(hh, tbl->nodes, node, tmpn)
+			if (strcmp(path, node->map.path) == 0) {
+				cage->has_node = (node->state == DLS_FRESH);
+				if (cage->has_node)
+					pr_trc("  %s has node.", cage->id);
+				break;
+			}
+
+		free(path);
+	}
+
+	HASH_ITER(hh, cages.ht, cage, tmp) {
+		if (cage->has_index + cage->has_content + cage->has_node < 3) {
+			pr_trc("  %s is orphaned; Deleting.", cage->id);
+			if (cage->has_index) {
+				path = get_index_path(tbl->name, cage->id);
+				file_rm_f(path);
+				free(path);
+			}
+			if (cage->has_content) {
+				path = path_join(tbl->name, cage->id);
+				file_rm_rf(path);
+				free(path);
+			}
+		}
+
+		ditch_cage(&cages, cage);
 	}
 }
 
@@ -1247,6 +1395,8 @@ cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 static void
 cleanup_cache(void)
 {
+	/* XXX Test: rsync almost always salvages. Is this sensible? */
+
 	pr_trc("Deleting abandoned files...");
 	foreach_node(cleanup_node, NULL);
 	pr_trc("Abandoned files deleted.");
@@ -1255,16 +1405,10 @@ cleanup_cache(void)
 	file_rm_rf(CACHE_TMPDIR);
 	pr_trc("tmp/ deleted.");
 
-	// XXX delete nodes which lack cages
-	// XXX delete cages that lack nodes
-	// XXX delete nodes that lack indexes
-	// etc
-	/*
-	 * Delete cages that do not have an index
-	 * Delete indexes that do not have a cage
-	 * Delete cages and indexes absent from the table
-	 * Delete table nodes that do not have a corresponding cage+index
-	 */
+	pr_trc("Deleting orphaned directories, indexes and nodes...");
+	clean_orphaned_cages(&cache.https);
+	clean_orphaned_cages(&cache.rsync);
+	pr_trc("Directories, indexes and nodes clean.");
 }
 
 void
