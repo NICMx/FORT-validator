@@ -1,14 +1,13 @@
-# FORT Validator
+# Fort 2 Development Fork
 
-An RPKI Relying Party and RTR Server.
+RPKI Relying Party.
 
-## Documentation
+This code is under construction. Prefer [Fort 1](https://github.com/NICMx/FORT-validator) for the time being.
 
-- [Home](https://nicmx.github.io/FORT-validator/index.html)
-- [Installation](https://nicmx.github.io/FORT-validator/installation.html)
-- [Usage](https://nicmx.github.io/FORT-validator/run.html)
-- [Arguments](https://nicmx.github.io/FORT-validator/usage.html)
+## A Special Thank You to NIC Mexico
 
-## Docker image
+We would like to thank NIC Mexico for its valuable contribution to the launch and early development of FORT Validator.
 
-See the [docker/ directory](docker/).
+Its collaboration and support were instrumental in laying the foundations of the project and remain an important part of FORT's history.
+
+Thank you for being part of those early steps and for helping make FORT possible.
