@@ -493,6 +493,8 @@ db_table_cache(struct db_table *table)
 	serial_t serial;
 	int ret;
 
+	pr_trc("Saving RTR...");
+
 	ret = rtridx_load(&table->rtr, true);
 	if (ret == ENOENT)
 		rtridx_init(&table->rtr);
@@ -525,6 +527,7 @@ db_table_cache(struct db_table *table)
 		goto fail;
 	rtridx_clean(&table->rtr);
 
+	pr_trc("RTR saved.");
 	return 0;
 
 fail:	file_rm_rf(path);

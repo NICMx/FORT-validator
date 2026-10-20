@@ -888,11 +888,6 @@ do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
 	pr_trc("Trying %s (online)...", uri_str(uri));
 	*result = NULL;
 
-	if (!tbl->enabled) {
-		pr_trc("Protocol disabled.");
-		return VV_FAIL;
-	}
-
 	if (tbl == &cache.rsync) {
 		if (single)
 			module = *uri;
@@ -906,6 +901,13 @@ do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
 	}
 	if (!node) {
 		mutex_unlock(&tbl->lock);
+		return VV_FAIL;
+	}
+
+	if (!tbl->enabled) {
+		mutex_unlock(&tbl->lock);
+		pr_trc("Protocol disabled.");
+		*result = node;
 		return VV_FAIL;
 	}
 
@@ -982,13 +984,14 @@ querier_downgrade(struct rpp_querier *dao)
 		if (uri_str(&dao->uris->rpkiNotify) != NULL) {
 			vv = do_refresh(&cache.https, &dao->uris->rpkiNotify,
 			    false, dl_rrdp, &node);
-			if (node != NULL && node->ctx.v.rrdp != NULL) {
-				dao->status = CS_RRDP_REFRESH;
+
+			if (node != NULL && node->ctx.v.rrdp != NULL)
 				dao->rrdp = rrdpdao_create(node->ctx.v.rrdp,
 				   &dao->uris->rpkiManifest);
-			}
+
 			if (vv == VV_CONTINUE) {
 				pr_trc("Validating RRDP Refresh.");
+				dao->status = CS_RRDP_REFRESH;
 				return VV_CONTINUE;
 			}
 			if (vv == VV_BUSY)
@@ -999,11 +1002,14 @@ querier_downgrade(struct rpp_querier *dao)
 	case CS_RRDP_REFRESH:
 		vv = do_refresh(&cache.rsync, &dao->uris->caRepository,
 		    false, dl_rsync, &node);
+
+		if (node != NULL && node->ctx.v.rsync != NULL)
+			dao->rsync = rsyncdao_create(node->ctx.v.rsync,
+			    &dao->uris->rpkiManifest);
+
 		if (vv == VV_CONTINUE) {
 			pr_trc("Validating rsync refresh.");
 			dao->status = CS_RSYNC_REFRESH;
-			dao->rsync = rsyncdao_create(node->ctx.v.rsync,
-			    &dao->uris->rpkiManifest);
 			return VV_CONTINUE;
 		}
 		if (vv == VV_BUSY)
@@ -1216,8 +1222,9 @@ cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
 	bool salvage;
 
-	pr_trc("  Cleaning up node: %s", node->map.path);
+	pr_trc("  Node: %s", node->map.path);
 
+	pr_trc("    Deleting index.");
 	rm_metadata(node);
 
 	salvage = false;
@@ -1234,10 +1241,10 @@ cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 	}
 
 	if (salvage) {
-		pr_trc("  Preserving node.");
+		pr_trc("    Preserving node.");
 		write_metadata(node);
 	} else {
-		pr_trc("  Deleting node.");
+		pr_trc("    Dropping node.");
 		file_rm_rf(node->map.path);
 		delete_node(tbl, node, NULL);
 	}
@@ -1334,7 +1341,6 @@ clean_orphaned_cages(struct cache_table *tbl)
 			if (!cage)
 				cage = add_cage(&cages, file->d_name, len);
 			cage->has_index = true;
-			pr_trc("  %s has index.", cage->id);
 
 		} else {
 			len = strlen(file->d_name);
@@ -1342,7 +1348,6 @@ clean_orphaned_cages(struct cache_table *tbl)
 			if (!cage)
 				cage = add_cage(&cages, file->d_name, len);
 			cage->has_content = true;
-			pr_trc("  %s has content.", cage->id);
 		}
 	}
 
@@ -1364,8 +1369,6 @@ clean_orphaned_cages(struct cache_table *tbl)
 		HASH_ITER(hh, tbl->nodes, node, tmpn)
 			if (strcmp(path, node->map.path) == 0) {
 				cage->has_node = (node->state == DLS_FRESH);
-				if (cage->has_node)
-					pr_trc("  %s has node.", cage->id);
 				break;
 			}
 
@@ -1373,6 +1376,10 @@ clean_orphaned_cages(struct cache_table *tbl)
 	}
 
 	HASH_ITER(hh, cages.ht, cage, tmp) {
+		pr_trc("  Cage %s: %s index, %s content, %s node", cage->id,
+		    cage->has_index   ? "has" : "lacks",
+		    cage->has_content ? "has" : "lacks",
+		    cage->has_node    ? "has" : "lacks");
 		if (cage->has_index + cage->has_content + cage->has_node < 3) {
 			pr_trc("  %s is orphaned; Deleting.", cage->id);
 			if (cage->has_index) {
@@ -1395,16 +1402,19 @@ clean_orphaned_cages(struct cache_table *tbl)
 static void
 cleanup_cache(void)
 {
-	/* XXX Test: rsync almost always salvages. Is this sensible? */
-
-	pr_trc("Deleting abandoned files...");
+	pr_trc("Cleaning up cache nodes...");
 	foreach_node(cleanup_node, NULL);
-	pr_trc("Abandoned files deleted.");
+	pr_trc("Nodes clean.");
 
 	pr_trc("Deleting tmp/...");
 	file_rm_rf(CACHE_TMPDIR);
 	pr_trc("tmp/ deleted.");
 
+	/*
+	 * "Directories" are the cache cages: cache/rsync/1/
+	 * "Indexes" are the cache cage indexes: cache/rsync/1.json
+	 * "Nodes" are the table nodes, in RAM.
+	 */
 	pr_trc("Deleting orphaned directories, indexes and nodes...");
 	clean_orphaned_cages(&cache.https);
 	clean_orphaned_cages(&cache.rsync);

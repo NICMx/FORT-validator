@@ -409,10 +409,24 @@ rsync_cleanup(struct rsync_ctx *ctx)
 {
 	struct cache_file_ref *new, *tmpn;
 
-	pr_trc("    1. Deleting noncommitted fallbacks");
+	if (ctx == NULL)
+		return false;
+
+	/*
+	 * There is no timeout at the moment.
+	 * If a file wasn't fallbacked, it's purged.
+	 * If the context doesn't have any fallbacks, it's deleted.
+	 */
+
+	pr_trc("    Deleting noncommitted fallback boxes.");
 	fallbacks_cleanup(&ctx->fbs);
 
-	pr_trc("    2. Move all the new/ files to rmt/");
+	if (HASH_COUNT(ctx->fbs.ht) == 0) {
+		pr_trc("    No fallbacks left.");
+		return false;
+	}
+
+	pr_trc("    Committing new/ files into rmt/.");
 	if (HASH_COUNT(ctx->new.ht) != 0) {
 		HASH_ITER(hh, ctx->new.ht, new, tmpn)
 			if (commit(ctx, new) != 0)
@@ -420,7 +434,7 @@ rsync_cleanup(struct rsync_ctx *ctx)
 		file_rm_rf(ctx->new_path);
 	}
 
-	pr_trc("    3. Deleting old unused rmt/ files");
+	pr_trc("    Deleting unused rmt/ files.");
 	file_nftw(ctx->remote_path, rm_if_not_fallbacked, ctx);
 
 	return true;
@@ -429,6 +443,9 @@ rsync_cleanup(struct rsync_ctx *ctx)
 void
 rsync_free(struct rsync_ctx *ctx)
 {
+	if (ctx == NULL)
+		return;
+
 	free(ctx->remote_path);
 	free(ctx->new_path);
 	free(ctx->fb_path);
@@ -445,6 +462,9 @@ rsync_free(struct rsync_ctx *ctx)
 void
 rsync_print(struct rsync_ctx *ctx, int indent)
 {
+	if (ctx == NULL)
+		return;
+
 	printf("%*s[rsync Context]\n", indent, "");
 	printf("%*s[Remote] path:%s\n", indent + 2, "", ctx->remote_path);
 	filerefs_print(&ctx->remote, indent + 4);

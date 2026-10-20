@@ -25,6 +25,8 @@ __vrps_update(void)
 	if (!db)
 		return NULL;
 
+	// XXX The RTR save should happen before the cache cleanup
+
 	if (slurm_apply(db) != 0)
 		goto fail;
 
