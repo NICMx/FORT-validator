@@ -788,6 +788,8 @@ provide_node(struct cache_table *tbl, struct uri const *url,
 	node = find_node(tbl, url);
 	if (node)
 		return (node->ctx.type == ctx_type) ? node : NULL;
+	if (!tbl->enabled)
+		return NULL;
 
 	node = pzalloc(sizeof(struct cache_node));
 	uri_copy(&node->map.url, url);
