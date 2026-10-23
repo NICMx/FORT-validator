@@ -447,6 +447,9 @@ rtr_open_file(serial_t serial, char const *basename, char const *mode,
 
 	path = rtr_filename2(serial, basename);
 
+	if (pr_trc_enabled() && strchr(mode, 'w'))
+		pr_trc("echo 'beep boop' > %s", path);
+
 	file = fopen(path, mode);
 	if (!file) {
 		ret = errno;

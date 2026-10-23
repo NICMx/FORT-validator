@@ -539,6 +539,15 @@ static struct fallback *
 fallback_free(struct fallback *fb, bool rm_files)
 {
 	struct fallback *next = fb->next;
+	char *mftnum;
+
+	if (pr_trc_enabled()) {
+		mftnum = asn_INTEGER2str(&fb->mft.num);
+		pr_trc("%s fallback: %s (mftnum %s)",
+		    rm_files ? "Dropping" : "Freeing",
+		    uri_str(&fb->rpkiManifest), mftnum);
+		free(mftnum);
+	}
 
 	uri_cleanup(&fb->rpkiManifest);
 	filerefs_clear(&fb->files, rm_files);
@@ -586,13 +595,16 @@ fallbacks_cleanup(struct fallback_ht *fbs)
 		}
 
 		if (first != newest) {
-			filerefs_clear(&first->files, true);
-			first->files = newest->files;
-			memset(&newest->files, 0, sizeof(newest->files));
+			struct files_ht tmp_files;
+			struct mft_meta tmp_mft;
 
-			mftm_cleanup(&first->mft);
+			tmp_files = first->files;
+			first->files = newest->files;
+			newest->files = tmp_files;
+
+			tmp_mft = first->mft;
 			first->mft = newest->mft;
-			memset(&newest->mft, 0, sizeof(newest->mft));
+			newest->mft = tmp_mft;
 
 			first->committed = true;
 		}

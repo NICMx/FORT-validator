@@ -99,6 +99,7 @@ step_create(struct rrdp_serial *serial)
 static void
 step_free(struct rrdp_step *step, bool rm_files)
 {
+	pr_trc("Dropping step: %s", step->serial.str);
 	filerefs_clear(&step->files, rm_files);
 	serial_cleanup(&step->serial);
 	free(step);
@@ -118,6 +119,7 @@ session_reset(struct rrdp_session *session, bool rm_files)
 static void
 session_cleanup(struct rrdp_session *session)
 {
+	pr_trc("Dropping session: %s", session->id);
 	session_reset(session, true);
 	free(session->id);
 	free(session);
