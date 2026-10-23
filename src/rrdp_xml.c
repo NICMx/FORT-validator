@@ -2299,12 +2299,12 @@ rrdpxml_fetch_notif(struct uri const *url, time_t mtim, bool *changed,
 	if (error)
 		goto end;
 
-	if (!(wargs.rdr->flags & RXRF_RRDP)) {
-		error = pr_err("The document was not an RRDP Notification.");
-		goto end;
-	}
 	if (!(*changed)) {
 		pr_trc("The Notification has not changed.");
+		goto end;
+	}
+	if (!(wargs.rdr->flags & RXRF_RRDP)) {
+		error = pr_err("The document was not an RRDP Notification.");
 		goto end;
 	}
 	if (wargs.rdr->state != state_ignore_input) {
