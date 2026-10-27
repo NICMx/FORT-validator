@@ -342,17 +342,16 @@ commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 		if (fbs.count != 0) {
 			newpath = cseq_next(&ctx->fbseq, &id);
 			if (!newpath) {
-				free(fbs.files);
 				error = EINVAL;
-				goto cancel;
+				goto efiles;
 			}
 
+			error = file_mkdir(ctx->fb_path, true);
+			if (error)
+				goto enpath;
 			error = file_mv(dst_path, newpath);
-			if (error) {
-				free(newpath);
-				free(fbs.files);
-				goto cancel;
-			}
+			if (error)
+				goto enpath;
 
 			cachefile_set_path(fbs.files[0], newpath, 0);
 			for (f = 1; f < fbs.count; f++)
@@ -366,12 +365,12 @@ commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 		/* TODO (performance) Too many mkdir()s */
 		error = mkdir_p(dst_path, strlen(ctx->remote_path) + 1);
 		if (error)
-			goto cancel;
+			goto edst;
 	}
 
 	error = file_mv(src_path, dst_path);
 	if (error)
-		goto cancel;
+		goto edst;
 
 	filerefs_rm(&ctx->new, new);
 
@@ -383,7 +382,9 @@ commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 
 	return 0;
 
-cancel:	free(dst_path);
+enpath:	free(newpath);
+efiles:	free(fbs.files);
+edst:	free(dst_path);
 	return error;
 }
 
