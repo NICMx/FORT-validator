@@ -62,7 +62,7 @@ parse_customer(ASId_t *asid, struct resources *parent, uint32_t *result)
 		return error;
 
 	if (*result == 0)
-		return pr_err("Customer 0 is not allowed...");
+		return pr_err("Customer 0 is not allowed.");
 
 	if (!resources_matches_asn(parent, *result))
 		return pr_err(

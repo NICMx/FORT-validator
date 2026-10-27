@@ -1522,13 +1522,13 @@ handle_ku_ee(void *ext, void *arg)
 static int
 handle_eku_ca(void *ext, void *arg)
 {
-	return pr_err("CA certificate has the 'Extended Key Usage' extension");
+	return pr_err("CA certificate has the 'Extended Key Usage' extension.");
 }
 
 static int
 handle_eku_ee(void *ext, void *arg)
 {
-	return pr_err("EE certificate has the 'Extended Key Usage' extension");
+	return pr_err("EE certificate has the 'Extended Key Usage' extension.");
 }
 
 static int
@@ -1657,8 +1657,6 @@ dist_point_error:
  *    URLs are also allowed, and also supposed to be ignored.
  *
  * cb() always steals ownership of the URL string.
- *
- * TODO (test) is this tested somewhere?
  */
 static int
 handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
@@ -1758,7 +1756,7 @@ handle_sia_ca(void *ext, void *arg)
 		return error;
 
 	if (!uri_is_child(&uris->caRepository, &uris->rpkiManifest))
-		return pr_err("RPP %s does not directly contain manifest %s.",
+		return pr_err("RPP %s does not directly contain manifest %s",
 		    uri_str(&uris->caRepository), uri_str(&uris->rpkiManifest));
 
 	return 0;
@@ -2128,10 +2126,8 @@ retry:	vv = querier_downgrade(ca->querier);
 	}
 
 	error = manifest_traverse(&mft->map, ca->querier, ca);
-	if (error) {
-		pr_err("Bad manifest.");
+	if (error)
 		goto retry;
-	}
 
 	queued = 0;
 	for (i = 0; i < ca->rpp.nfiles; i++) {
@@ -2162,7 +2158,7 @@ validate_signedObject(struct extension_uris const *exts, struct uri const *url)
 		pr_panic("Certificate's signedObject was not recorded.");
 
 	if (!uri_equals(&exts->signedObject, url))
-		return pr_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
+		return pr_err("Certificate's signedObject (%s) does not match the URI of its own signed object (%s).",
 		    uri_str(&exts->signedObject), uri_str(url));
 
 	return 0;

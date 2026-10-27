@@ -52,7 +52,7 @@ static int
 validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
     struct mft_meta *meta)
 {
-#define TM_FMT "%02d/%02d/%02d %02d:%02d:%02d"
+#define TM_FMT "%02d-%02d-%02d %02d:%02d:%02d"
 #define TM_ARGS(tm)							\
 	tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,			\
 	tm.tm_hour, tm.tm_min, tm.tm_sec
@@ -384,7 +384,7 @@ collect_files(struct cache_mapping const *map,
 		file = querier_map(querier, &url);
 		if (!file) {
 			error = pr_err(
-			    "Manifest file '%s' is absent from the cache.",
+			    "Manifest's fileList file '%s' is absent from the cache.",
 			    uri_str(&url));
 			uri_cleanup(&url);
 			goto revert;
