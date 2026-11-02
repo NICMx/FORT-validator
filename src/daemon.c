@@ -22,7 +22,6 @@
 init_verdict
 daemonize(void)
 {
-	char *pwd;
 	pid_t pid;
 	long int fds;
 	int error;
@@ -33,31 +32,21 @@ daemonize(void)
 
 	pr_trc("Daemonizing...");
 
-	/* Get the working dir, the daemon will use (and free) it later */
-	pwd = getcwd(NULL, 0);
-	if (pwd == NULL) {
-		error = errno;
-		if (error == ENOMEM)
-			enomem_panic();
-		pr_err("Cannot get current directory: %s", strerror(error));
-		return IV_FAIL;
-	}
-
 	pid = fork();
 	if (pid < 0) {
 		pr_err("Couldn't fork to daemonize: %s", strerror(errno));
-		goto fail;
+		return IV_FAIL;
 	}
 
 	/* Terminate parent */
 	if (pid > 0)
-		goto done;
+		return IV_DONE;
 
 	/* Child goes on from here */
 	if (setsid() < 0) {
 		pr_err("Couldn't create new session, ending execution: %s",
 		    strerror(errno));
-		goto fail;
+		return IV_FAIL;
 	}
 
 	/*
@@ -76,12 +65,12 @@ daemonize(void)
 	if (pid < 0) {
 		pr_err("Couldn't fork again to daemonize, ending execution: %s",
 		    strerror(errno));
-		goto fail;
+		return IV_FAIL;
 	}
 
 	/* Terminate parent */
 	if (pid > 0)
-		goto done;
+		return IV_DONE;
 
 	/* Close all descriptors, getdtablesize() isn't portable */
 	/* XXX WTF is this? It's closing FDs 0-1024 in my env */
@@ -95,19 +84,6 @@ daemonize(void)
 	/* XXX WTF? 0 & 0777? */
 	umask(0);
 
-	if (chdir(pwd) < 0) {
-		pr_err("Couldn't chdir() daemon, ending execution: %s",
-		    strerror(errno));
-		goto fail;
-	}
-
-	free(pwd);
 	pr_trc("Daemonized.");
 	return IV_CONTINUE;
-
-fail:	free(pwd);
-	return IV_FAIL;
-
-done:	free(pwd);
-	return IV_DONE;
 }
