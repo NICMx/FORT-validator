@@ -113,9 +113,20 @@ fort_cycle(int argc, char **argv)
 		set_logger_console(); /* XXX hardcoded */
 	}
 
+	/* Needs to happen before drop_privileges() if port < 1024 */
+	if (fortcfg.mode == SERVER) {
+		error = rtr_setup();
+		if (error)
+			goto revert_daemon;
+	}
+
+	error = drop_privileges();
+	if (error)
+		goto revert_rtr;
+
 	error = cache_setup_wd();
 	if (error)
-		goto revert_daemon;
+		goto revert_rtr;
 
 	rsync_setup(); /* fork then thread */
 
@@ -149,9 +160,20 @@ fort_cycle(int argc, char **argv)
 	error = stats_setup();
 	if (error)
 		goto revert_rsync;
+
+	/*
+	 * Notice we're doing this after dropping privileges.
+	 * This means Prometheus will not be bound to ports < 1024, even if the
+	 * user starts us as root.
+	 * Unless the environment is Linux, and the user starts us with network
+	 * capabilities or whatever.
+	 * I'm OK with this. microhttpd is kind of illegible, so I'm not eager
+	 * to give it opportunities to mess up.
+	 */
 	error = prometheus_setup(); /* likely starts threads */
 	if (error)
 		goto revert_stats;
+
 	error = nid_init();
 	if (error)
 		goto revert_prometheus;
@@ -198,6 +220,9 @@ revert_stats:
 	stats_teardown();
 revert_rsync:
 	rsync_teardown();
+revert_rtr:
+	if (fortcfg.mode == SERVER)
+		rtr_teardown();
 revert_daemon:
 	daemon_teardown();
 revert_config:

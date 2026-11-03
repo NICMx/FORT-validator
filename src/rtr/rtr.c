@@ -321,7 +321,7 @@ init_server_fd(struct server_init_ctx *ctx)
 	return error;
 }
 
-static int
+int
 init_server_fds(void)
 {
 	struct server_init_ctx ctx = { 0 };
@@ -806,6 +806,27 @@ end_server_threads(size_t count)
 }
 
 int
+rtr_setup(void)
+{
+	int error;
+
+	server_arraylist_init(&servers);
+	client_arraylist_init(&clients);
+
+	error = init_server_fds();
+	if (error)
+		destroy_db();
+
+	return error;
+}
+
+void
+rtr_teardown(void)
+{
+	destroy_db();
+}
+
+int
 rtr_start(void)
 {
 	array_index i;
@@ -813,18 +834,11 @@ rtr_start(void)
 
 	rtridx_expire();
 
-	server_arraylist_init(&servers);
-	client_arraylist_init(&clients);
-
-	error = init_server_fds();
-	if (error)
-		goto fds;
-
 	error = pthread_cond_init(&poller2worker, NULL);
 	if (error) {
 		pr_crit("pthread_cond_init(p2w) returned error %d: %s",
 		    error, strerror(error));
-		goto fds;
+		return error;
 	}
 
 	if (pipe(worker2poller) < 0) {
@@ -860,12 +874,11 @@ threads:
 	close(worker2poller[1]);
 cond:
 	pthread_cond_destroy(&poller2worker);
-fds:
-	destroy_db();
 	return error;
 }
 
-void rtr_stop(void)
+void
+rtr_stop(void)
 {
 	int error;
 
@@ -880,7 +893,6 @@ void rtr_stop(void)
 	close(worker2poller[1]);
 
 	pthread_cond_destroy(&poller2worker);
-	destroy_db();
 }
 
 void

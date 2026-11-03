@@ -3,6 +3,9 @@
 
 #include "rtr/meta.h"
 
+int rtr_setup(void);
+void rtr_teardown(void);
+
 int rtr_start(void);
 void rtr_stop(void);
 

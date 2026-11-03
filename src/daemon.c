@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -111,6 +112,51 @@ std2devnull(void)
 
 	log_silence_std();
 
+	return 0;
+}
+
+int
+drop_privileges(void)
+{
+	struct passwd *pwd;
+	int error;
+
+	if (getuid() != 0)
+		return 0;
+
+	pr_trc("Dropping privileges (switching to 'fort' user)...");
+
+	errno = 0;
+	pwd = getpwnam("fort");
+	if (!pwd) {
+		error = errno;
+		if (!error)
+			error = ENOENT;
+		pr_err("Cannot retrieve uid and gid of user 'fort': %s",
+		    strerror(error));
+		return error;
+	}
+
+	if (setgid(pwd->pw_gid) < 0) {
+		error = errno;
+		pr_err("Cannot switch to the 'fort' group: %s",
+		    strerror(error));
+		return error;
+	}
+	if (setuid(pwd->pw_gid) < 0) {
+		error = errno;
+		pr_err("Cannot switch to the 'fort' user: %s",
+		    strerror(error));
+		return error;
+	}
+
+	if (setuid(0) == 0) {
+		pr_err("I regained root privileges after dropping them; "
+		    "something has gone wrong.");
+		return EINVAL;
+	}
+
+	pr_trc("Privileges dropped.");
 	return 0;
 }
 
@@ -252,7 +298,7 @@ daemonize(void)
 	 */
 
 	/* 13. Drop privileges */
-	/* XXX */
+	/* Postponed; needs to happen regardless of daemonization */
 
 	/* 14c. Release grandparent */
 	if (close(notifier[1]) < 0)
