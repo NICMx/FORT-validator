@@ -4,5 +4,6 @@
 #include "common.h"
 
 init_verdict daemonize(void);
+void daemon_teardown(void);
 
 #endif /* SRC_DAEMON_H_ */

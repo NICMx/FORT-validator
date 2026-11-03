@@ -15,7 +15,6 @@
 #include "config/time.h"
 #include "config/uint.h"
 #include "configure_ac.h"
-#include "daemon.h"
 #include "file.h"
 #include "json_handler.h"
 #include "log.h"
@@ -845,7 +844,7 @@ become_absolute_paths(void)
 	return 0;
 }
 
-static void
+void
 set_logger_syslog(void)
 {
 	struct log_listeners list = TAILQ_HEAD_INITIALIZER(list);
@@ -859,7 +858,7 @@ set_logger_syslog(void)
 	log_init(&list);
 }
 
-static void
+void
 set_logger_console(void)
 {
 	struct log_listeners list = TAILQ_HEAD_INITIALIZER(list);
@@ -876,8 +875,6 @@ set_logger_console(void)
 init_verdict
 handle_flags_config(int argc, char **argv)
 {
-	init_verdict verdict;
-
 	if (parse_cfg(argc, argv) != 0) {
 		pr_err("Try '%s --help' for more information.", argv[0]);
 		return IV_FAIL;
@@ -886,17 +883,6 @@ handle_flags_config(int argc, char **argv)
 	if (become_absolute_paths() != 0) {
 		free_rpki_config();
 		return IV_FAIL;
-	}
-
-	if (fortcfg.daemon) {
-		set_logger_syslog(); /* XXX hardcoded */
-		verdict = daemonize();
-		if (verdict != IV_CONTINUE) {
-			free_rpki_config();
-			return verdict;
-		}
-	} else {
-		set_logger_console(); /* XXX hardcoded */
 	}
 
 	print_config();

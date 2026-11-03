@@ -16,6 +16,7 @@
 #include "config.h"
 #include "report.h"
 #include "thread_var.h"
+#include "types/list.h"
 #include "types/path.h"
 
 struct level {
@@ -227,21 +228,26 @@ add_listener(struct loggers *list, struct log_listener *new)
 }
 
 static void
+free_logger(struct logger *lgr)
+{
+	if (lgr->stream)
+		fclose(lgr->stream);
+	if (lgr->lock) {
+		pthread_mutex_destroy(lgr->lock);
+		free(lgr->lock);
+	}
+	if (lgr->free)
+		free(lgr);
+}
+
+static void
 clear_loggers(struct loggers *list)
 {
 	struct logger *lgr;
 
 	while ((lgr = SLIST_FIRST(list)) != NULL) {
-		if (lgr->stream)
-			fclose(lgr->stream);
-		if (lgr->lock) {
-			pthread_mutex_destroy(lgr->lock);
-			free(lgr->lock);
-		}
-
 		SLIST_REMOVE_HEAD(list, lh);
-		if (lgr->free)
-			free(lgr);
+		free_logger(lgr);
 	}
 }
 
@@ -264,6 +270,20 @@ log_init(struct log_listeners *descriptors)
 	clear_loggers(&listeners);
 	listeners = newlist;
 	return 0;
+}
+
+/* Removes the standard stream logging handlers */
+void
+log_silence_std(void)
+{
+	struct logger *lgr, *tmp;
+
+	SLIST_FOREACH_SAFE(lgr, &listeners, lh, tmp) {
+		if (lgr->cb == console_cb) {
+			SLIST_REMOVE(&listeners, lgr, logger, lh);
+			free_logger(lgr);
+		}
+	}
 }
 
 void

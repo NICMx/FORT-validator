@@ -1,8 +1,10 @@
 #include <errno.h>
+#include <syslog.h>
 
 #include "cache.h"
 #include "common.h"
 #include "config.h"
+#include "daemon.h"
 #include "ext.h"
 #include "hash.h"
 #include "http.h"
@@ -18,8 +20,6 @@
 #include "stats.h"
 #include "task.h"
 #include "thread_var.h"
-
-#include <syslog.h>
 
 static int
 fort_standalone(void)
@@ -88,6 +88,8 @@ fort_cycle(int argc, char **argv)
 	int error;
 
 	/* DO NOT START ANY THREADS UNTIL WE'RE DONE fork()ING. */
+	/* DO NOT INSTALL SIGNAL HANDLERS UNTIL WE'RE DONE DAEMONIZING. */
+	/* Also: Daemonizing will close all file descriptors. */
 
 	verdict = handle_flags_config(argc, argv);
 	if (verdict == IV_FAIL)
@@ -95,11 +97,50 @@ fort_cycle(int argc, char **argv)
 	if (verdict == IV_DONE)
 		return 0;
 
-	error = cache_setup1();
-	if (error)
-		goto revert_config;
+	if (fortcfg.daemon) {
+		verdict = daemonize(); /* fork */
+		if (verdict == IV_FAIL) {
+			error = EINVAL;
+			goto revert_config;
+		}
+		if (verdict == IV_DONE) {
+			error = 0;
+			goto revert_config;
+		}
 
-	rsync_setup(); /* Fork rsync spawner ASAP */
+		set_logger_syslog(); /* XXX hardcoded */
+	} else {
+		set_logger_console(); /* XXX hardcoded */
+	}
+
+	error = cache_setup_wd();
+	if (error)
+		goto revert_daemon;
+
+	rsync_setup(); /* fork then thread */
+
+	/*
+	 * cache_setup_lock() needs to happen after daemonize(), because it
+	 * wants to print the grandchild's PID in the lockfile, not the
+	 * grandparent's.
+	 *
+	 * cache_setup_lock (CSL) and register_signal_handlers (RGS) need to
+	 * happen as close to each other as possible.
+	 *
+	 * Suppose we get SIGTERM between these functions...
+	 *
+	 * 1. CSL then RGS, we're interrupted between them:
+	 *    The signal handler doesn't delete our lock.
+	 * 2. RGS then CSL, we're interrupted between them:
+	 *    The signal handler deletes some other instance's lock.
+	 *
+	 * 1 is better because we already couldn't guarantee the lock was
+	 * deleted in every situation. (SIGKILL, or register_signal_handlers()
+	 * fails to install some handler.)
+	 */
+	error = cache_setup_lock();
+	if (error)
+		goto revert_rsync;
 	register_signal_handlers();
 
 	error = thvar_init();
@@ -108,7 +149,7 @@ fort_cycle(int argc, char **argv)
 	error = stats_setup();
 	if (error)
 		goto revert_rsync;
-	error = prometheus_setup();
+	error = prometheus_setup(); /* likely starts threads */
 	if (error)
 		goto revert_stats;
 	error = nid_init();
@@ -123,9 +164,7 @@ fort_cycle(int argc, char **argv)
 	error = http_init();
 	if (error)
 		goto revert_hash;
-	error = cache_setup2();
-	if (error)
-		goto revert_http;
+	cache_setup_tables();
 	error = output_setup();
 	if (error)
 		goto revert_http;
@@ -135,10 +174,10 @@ fort_cycle(int argc, char **argv)
 
 	switch (fortcfg.mode) {
 	case STANDALONE:
-		error = fort_standalone();
+		error = fort_standalone(); /* starts threads */
 		break;
 	case SERVER:
-		error = fort_server();
+		error = fort_server(); /* starts threads */
 		break;
 	case PRINT_FILE:
 		error = print_file();
@@ -159,6 +198,8 @@ revert_stats:
 	stats_teardown();
 revert_rsync:
 	rsync_teardown();
+revert_daemon:
+	daemon_teardown();
 revert_config:
 	free_rpki_config();
 	return error;

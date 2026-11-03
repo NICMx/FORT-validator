@@ -48,6 +48,7 @@ TAILQ_HEAD(log_listeners, log_listener);
 
 void log_setup(void);			/* Enables pr_* functions */
 int log_init(struct log_listeners *);	/* Loads configuration */
+void log_silence_std(void);
 void log_teardown(void);
 
 /*

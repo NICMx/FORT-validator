@@ -178,6 +178,9 @@ void free_rpki_config(void);
 
 #define MAX_ASPA_PROVIDERS 16380u /* Absolute maximum */
 
+void set_logger_syslog(void);
+void set_logger_console(void);
+
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);
 struct option_field const *get_option_metadatas(void);

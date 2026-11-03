@@ -5,8 +5,9 @@
 #include "common.h"
 #include "types/rpp.h"
 
-int cache_setup1(void);
-int cache_setup2(void);
+int cache_setup_wd(void);
+int cache_setup_lock(void);
+void cache_setup_tables(void);
 void cache_atexit(void);
 
 int cache_prepare(void);	/* Prepare cache for new validation cycle */

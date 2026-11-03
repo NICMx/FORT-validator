@@ -16,6 +16,7 @@
 #include "file.h"
 #include "log.h"
 #include "stream.h"
+#include "types/list.h"
 #include "types/map.h"
 #include "types/path.h"
 
@@ -64,15 +65,6 @@ struct rsync_tasks {
 
 	struct rsync_task_list queued;
 };
-
-#ifndef LIST_FOREACH_SAFE
-#define LIST_FOREACH_SAFE(var, ls, lh, tmp)				\
-    for (								\
-        var = LIST_FIRST(ls), tmp = (var ? LIST_NEXT(var, lh) : NULL);	\
-        var != NULL;							\
-        var = tmp, tmp = (var ? LIST_NEXT(var, lh) : NULL)		\
-    )
-#endif
 
 /* Spawner response thread; The thread that listens to spawner responses. */
 static pthread_t srt;

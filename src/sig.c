@@ -7,6 +7,7 @@
 #include <signal.h>
 
 #include "cache.h"
+#include "daemon.h"
 #include "log.h"
 #include "output_printer.h"
 
@@ -87,6 +88,7 @@ handle_program_error_signal(int signum)
 
 	cache_atexit();
 	output_atexit();
+	daemon_teardown();
 
 	reraise(signum, 1);
 }
@@ -102,6 +104,7 @@ handle_termination_signal(int signum)
 
 	cache_atexit();
 	output_atexit();
+	daemon_teardown();
 
 	reraise(signum, 0);
 }

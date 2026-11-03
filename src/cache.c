@@ -108,9 +108,6 @@ static struct rpki_cache {
 	struct cache_table https;
 } cache;
 
-/* "Is the lockfile ours?" */
-static volatile sig_atomic_t lockfile_owned;
-
 struct file_querier {
 	struct cache_node *node;
 	bool is_refresh;
@@ -146,7 +143,7 @@ struct rpp_querier {
 	struct extension_uris *uris;
 };
 
-#define LOCKFILE ".lock"
+#define LOCKFILE "fort.pid"
 #define METAFILE "meta.json"
 #define TAGNAME_VERSION "fort-version"
 
@@ -296,13 +293,6 @@ init_table(struct cache_table *tbl, char *name, bool enabled)
 	    "pthread_mutex_init");
 }
 
-static void
-init_tables(void)
-{
-	init_table(&cache.rsync, "rsync", fortcfg.rsync.enabled);
-	init_table(&cache.https, "https", fortcfg.http.enabled);
-}
-
 static int
 reset_cache_dir(void)
 {
@@ -351,69 +341,15 @@ init_cachedir_tag(void)
 		   "#	https://bford.info/cachedir/\n");
 }
 
-static int
-lock_cache(void)
-{
-	int fd;
-	int error;
-
-	pr_trc("touch " LOCKFILE);
-
-	/*
-	 * Suppose we get SIGTERM in the middle of this function.
-	 *
-	 * 1. open() then lockfile_owned = 1, we're interrupted between them:
-	 *    The handler doesn't delete our lock.
-	 * 2. lockfile_owned = 1 then open(), we're interrupted between them:
-	 *    The handler deletes some other instance's lock.
-	 *
-	 * 1 is better because we already couldn't guarantee the lock was
-	 * deleted on every situation. (SIGKILL)
-	 */
-
-	fd = open(LOCKFILE, O_CREAT | O_EXCL, 0644);
-	if (fd < 0) {
-		error = errno;
-		pr_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
-		    fortcfg.cache, strerror(error));
-		return error;
-	}
-	close(fd);
-
-	lockfile_owned = 1;
-	return 0;
-}
-
-static void
-unlock_cache(void)
-{
-	pr_trc("rm " LOCKFILE);
-
-	if (!lockfile_owned) {
-		pr_trc("The cache wasn't locked.");
-		return;
-	}
-
-	if (unlink(LOCKFILE) < 0) {
-		int error = errno;
-		pr_err("Cannot remove lockfile: %s", strerror(error));
-		if (error != ENOENT)
-			return;
-	}
-
-	lockfile_owned = 0;
-}
-
 /* THIS FUNCTION CAN BE CALLED FROM A SIGNAL HANDLER. */
 void
 cache_atexit(void)
 {
-	if (lockfile_owned)
-		unlink(LOCKFILE);
+	unlink(LOCKFILE);
 }
 
 int
-cache_setup1(void)
+cache_setup_wd(void)
 {
 	int error;
 
@@ -428,23 +364,62 @@ cache_setup1(void)
 }
 
 int
-cache_setup2(void)
+cache_setup_lock(void)
 {
-	int error;
+	int fd;
+	int error, err2;
 
-	init_tables();
+	pr_trc("echo $PID > " LOCKFILE);
+
+	fd = open(LOCKFILE, O_WRONLY | O_CREAT | O_EXCL, 0644);
+	if (fd < 0) {
+		error = errno;
+		if (error == EEXIST)
+			pr_err("%s/" LOCKFILE " already exists; "
+			    "Fort daemon already running.", fortcfg.cache);
+		else
+			pr_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
+			    fortcfg.cache, strerror(error));
+		return error;
+	}
+
+	if (dprintf(fd, "%d\n", getpid()) < 0) {
+		error = errno;
+		if (!error)
+			error = EIO;
+		pr_err("Cannot write PID in lockfile: %s", strerror(error));
+		close(fd);
+		goto cancel;
+	}
+
+	close(fd);
+
+	/*
+	 * Please remember that atexit gets called on exit() and main() return,
+	 * not on signals.
+	 */
 
 	errno = 0;
 	error = atexit(cache_atexit);
 	if (error) {
-		int err2 = errno;
+		err2 = errno;
 		pr_err("Cannot register cache's exit function.");
 		pr_err("Error message attempt 1: %s", strerror(error));
 		pr_err("Error message attempt 2: %s", strerror(err2));
-		return error;
+		goto cancel;
 	}
 
 	return 0;
+
+cancel:	unlink(LOCKFILE);
+	return error;
+}
+
+void
+cache_setup_tables(void)
+{
+	init_table(&cache.rsync, "rsync", fortcfg.rsync.enabled);
+	init_table(&cache.https, "https", fortcfg.http.enabled);
 }
 
 static struct cache_node *
@@ -672,10 +647,6 @@ cache_prepare(void)
 {
 	int error;
 
-	error = lock_cache();
-	if (error)
-		return error;
-
 	if (load_index() != 0) {
 		error = reset_cache_dir();
 		if (error)
@@ -696,7 +667,6 @@ cache_prepare(void)
 	return 0;
 
 fail:	flush_nodes();
-	unlock_cache();
 	return error;
 }
 
@@ -1430,7 +1400,6 @@ cache_commit(void)
 	cache_print();
 	cleanup_cache();
 	file_write_txt(METAFILE, "{ \"fort-version\": \"" PACKAGE_VERSION "\" }");
-	unlock_cache();
 	flush_nodes();
 }
 
