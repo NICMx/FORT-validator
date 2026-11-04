@@ -7,7 +7,6 @@
 #include <sys/types.h>
 
 #include "common.h"
-#include "config/file_type.h"
 #include "config/log_conf.h"
 #include "config/mode.h"
 #include "config/output_format.h"
@@ -155,9 +154,6 @@ struct fort_config {
 			unsigned int max;
 		} validation;
 	} thread_pool;
-
-	enum file_type ft;
-	char const *payload;
 
 	struct {
 		/*

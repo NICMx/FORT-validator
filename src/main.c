@@ -11,7 +11,6 @@
 #include "log.h"
 #include "nid.h"
 #include "output_printer.h"
-#include "print_file.h"
 #include "prometheus.h"
 #include "rsync.h"
 #include "rtr/db/vrps.h"
@@ -200,9 +199,6 @@ fort_cycle(int argc, char **argv)
 		break;
 	case SERVER:
 		error = fort_server(); /* starts threads */
-		break;
-	case PRINT_FILE:
-		error = print_file();
 		break;
 	}
 

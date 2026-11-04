@@ -474,13 +474,6 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct fort_config, debug.validation_time),
 	},
 
-	{
-		.id = 13001,
-		.name = "file-type",
-		.type = &gt_file_type,
-		.offset = offsetof(struct fort_config, ft),
-		.doc = "Parser for --mode=print",
-	},
 	{ 0 },
 };
 
@@ -685,13 +678,6 @@ validate_config(void)
 {
 	char const *proxy;
 
-	if (fortcfg.mode == PRINT_FILE)
-		return 0;
-
-	if (fortcfg.payload != NULL)
-		return pr_err("I don't know what '%s' is.",
-		    fortcfg.payload);
-
 	if (fortcfg.tal == NULL)
 		return pr_err("The TAL(s) location (--tal) is mandatory.");
 
@@ -786,8 +772,10 @@ parse_cfg(int argc, char **argv)
 			goto fail;
 	}
 
-	if (optind < argc)
-		fortcfg.payload = argv[optind];
+	if (optind < argc) {
+		error = pr_err("I don't know what '%s' is.", argv[optind]);
+		goto fail;
+	}
 
 	error = validate_config();
 	if (error)

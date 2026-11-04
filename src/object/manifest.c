@@ -14,6 +14,16 @@
 #include "object/signed_object.h"
 #include "thread_var.h"
 
+enum file_type {
+	FT_UNK,
+	FT_ROA,
+	FT_ASA,
+	FT_MFT,
+	FT_GBR,
+	FT_CER,
+	FT_CRL,
+};
+
 static int
 decode_manifest(struct signed_object *so, struct Manifest **result)
 {

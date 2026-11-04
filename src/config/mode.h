@@ -11,8 +11,6 @@ enum mode {
 	SERVER,
 	/* Run standalone validation (run validation once and exit) */
 	STANDALONE,
-	/* Print file in standard output */
-	PRINT_FILE,
 };
 
 extern const struct global_type gt_mode;
