@@ -326,10 +326,6 @@ handle_snapshot(struct update_notification *notif,
 	if (!step) {
 		step = step_create(&notif->session.serial);
 		TAILQ_INSERT_HEAD(&session->steps, step, lh);
-	} else if (!serial_equals(&notif->session.serial, &step->serial)) {
-		/* XXX what is this? */
-		return pr_err("Notification serial (%s) does not match most recent delta serial (%s)",
-		    notif->session.serial.str, step->serial.str);
 	}
 
 	error = rrdpxml_explode_snapshot(notif, &step->files, seq);
