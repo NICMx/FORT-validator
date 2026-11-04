@@ -192,18 +192,6 @@ get_http_response_code(struct http_handler *handler, long *http_code,
 	return 0;
 }
 
-/* XXX Retries removed. Ditch this? */
-static int
-handle_http_response_code(long http_code)
-{
-	/* This is the same logic from CURL, according to its documentation. */
-	if (http_code == 408 || http_code == 429)
-		return EAGAIN; /* Retry */
-	if (500 <= http_code && http_code < 600)
-		return EAGAIN; /* Retry */
-	return EINVAL; /* Do not retry */
-}
-
 static int
 check_same_origin(struct uri const *src, char const *redirect)
 {
@@ -234,8 +222,6 @@ check_same_origin(struct uri const *src, char const *redirect)
  * @ims can be 0, which means "no epoch."
  * @changed can be NULL, which means "I don't care."
  * If @changed is not NULL, initialize it to false.
- *
- * XXX where is the error handling for the result of @writer?
  */
 int
 http_download(struct uri const *src, curl_write_callback writer,
@@ -284,14 +270,14 @@ http_download(struct uri const *src, curl_write_callback writer,
 				error = EAGAIN; /* Retry */
 				goto end;
 			default:
-				error = handle_http_response_code(http_code);
+				error = EINVAL;
 				goto end;
 			}
 		}
 
 		if (http_code >= 400 || http_code == 204) {
 			pr_err("HTTP result code: %ld", http_code);
-			error = handle_http_response_code(http_code);
+			error = EINVAL;
 			goto end;
 		}
 		if (http_code == 304) {
