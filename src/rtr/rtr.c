@@ -882,6 +882,8 @@ rtr_stop(void)
 {
 	int error;
 
+	fort_end = true;
+
 	end_server_threads(fortcfg.thread_pool.server.max);
 
 	error = pthread_join(control_thread, NULL);
