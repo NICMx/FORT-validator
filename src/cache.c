@@ -70,6 +70,9 @@ struct cache_node {
 	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Commit */
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
+#define CNF_REJECTED (1 << 0)	/* This node needs to be deleted */
+	int flags;
+
 	struct {
 		enum context_type type;
 		/*
@@ -438,6 +441,11 @@ json2node(json_t *json)
 		goto node;
 	}
 
+	/*
+	 * XXX Don't JSON this.
+	 * This field is often used for rm -rf, so it should be autocomputed in
+	 * an extremely sanitized way.
+	 */
 	error = json_get_str(json, "path", &path);
 	if (error) {
 		pr_trc("path: %s", strerror(abs(error)));
@@ -547,7 +555,7 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 	int wrt;
 	json_error_t jerr;
 	json_t *root;
-	struct cache_node *node;
+	struct cache_node *node, *old;
 
 	if (S_ISDOTS(dir))
 		return;
@@ -577,16 +585,47 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 
 	node = json2node(root);
 	if (node != NULL) {
-		// XXX worry about dupes
-		HASH_ADD_KEYPTR(hh, tbl->nodes,
+		HASH_ADD_KEYPTR_SAFE(tbl->nodes,
 		    uri_str(&node->map.url), uri_len(&node->map.url),
-		    node);
+		    node, old);
+		if (old) {
+			pr_wrn("%s and %s.json are both identified by URI '%s'. "
+			    "Dropping both.", filename, old->map.path,
+			    uri_str(&node->map.url));
+
+			file_rm_f(filename);
+			file_rm_rf(node->map.path);
+			delete_node(NULL, node, NULL);
+
+			old->flags |= CNF_REJECTED;
+		}
 	} else {
-		pr_wrn("Malformed JSON!");
+		pr_wrn("%s: Malformed JSON!", filename);
 	}
 
 	pr_clutter("%s: Loaded.", filename);
 end:	json_decref(root);
+}
+
+static void
+drop_rejected_nodes(struct cache_table *tbl)
+{
+	struct cache_node *node, *tmp;
+	char json_path[64];
+	int wrt;
+
+	HASH_ITER(hh, tbl->nodes, node, tmp) {
+		if (node->flags & CNF_REJECTED) {
+			wrt = snprintf(json_path, 64, "%s.json", node->map.path);
+			if (wrt >= 64)
+				pr_panic("drop_rejected_nodes: %d %s",
+				    wrt, node->map.path);
+
+			file_rm_f(json_path);
+			file_rm_rf(node->map.path);
+			delete_node(tbl, node, NULL);
+		}
+	}
 }
 
 static void
@@ -620,6 +659,8 @@ collect_metas(struct cache_table *tbl)
 		    tbl->name, strerror(error));
 
 	closedir(dir);
+
+	drop_rejected_nodes(tbl);
 
 	tbl->seq.pfx.str = tbl->name;
 	tbl->seq.pfx.len = strlen(tbl->name);
