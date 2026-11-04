@@ -254,8 +254,6 @@ node2json(struct cache_node const *node)
 
 	if (json_add_str(json, "uri", uri_str(&node->map.url)))
 		goto fail;
-	if (json_add_str(json, "path", node->map.path))
-		goto fail;
 	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
 	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
@@ -426,10 +424,9 @@ cache_setup_tables(void)
 }
 
 static struct cache_node *
-json2node(json_t *json)
+json2node(json_t *json, char const *path)
 {
 	struct cache_node *node;
-	char const *path;
 	json_t *rrdp, *rsync;
 	int error;
 
@@ -441,16 +438,6 @@ json2node(json_t *json)
 		goto node;
 	}
 
-	/*
-	 * XXX Don't JSON this.
-	 * This field is often used for rm -rf, so it should be autocomputed in
-	 * an extremely sanitized way.
-	 */
-	error = json_get_str(json, "path", &path);
-	if (error) {
-		pr_trc("path: %s", strerror(abs(error)));
-		goto url;
-	}
 	node->map.path = pstrdup(path);
 
 	error = json_get_ts(json, "attempt", &node->attempt_ts);
@@ -495,7 +482,7 @@ json2node(json_t *json)
 	return node;
 
 path:	free(node->map.path);
-url:	uri_cleanup(&node->map.url);
+	uri_cleanup(&node->map.url);
 node:	free(node);
 	return NULL;
 }
@@ -551,7 +538,8 @@ fail:	json_decref(root);
 static void
 collect_meta(struct cache_table *tbl, struct dirent *dir)
 {
-	char filename[64];
+	char json_path[64];
+	char cage_path[64];
 	int wrt;
 	json_error_t jerr;
 	json_t *root;
@@ -562,48 +550,52 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 
 	pr_trc("Collecting metadata: %s/%s.json", tbl->name, dir->d_name);
 
-	wrt = snprintf(filename, 64, "%s/%s.json", tbl->name, dir->d_name);
+	wrt = snprintf(json_path, 64, "%s/%s.json", tbl->name, dir->d_name);
 	if (wrt >= 64)
-		pr_panic("collect_meta: %d %s %s", wrt, tbl->name, dir->d_name);
+		pr_panic("collect_meta1: %d %s %s", wrt, tbl->name, dir->d_name);
 
-	pr_clutter("%s: Loading...", filename);
+	pr_clutter("%s: Loading...", json_path);
 
-	root = json_load_file(filename, 0, &jerr);
+	root = json_load_file(json_path, 0, &jerr);
 	if (root == NULL) {
 		if (json_error_code(&jerr) == json_error_cannot_open_file)
-			pr_wrn("%s: File does not exist.", filename);
+			pr_wrn("%s: File does not exist.", json_path);
 		else
 			pr_wrn("%s: Json parsing failure at (%d:%d): %s",
-			    filename, jerr.line, jerr.column, jerr.text);
+			    json_path, jerr.line, jerr.column, jerr.text);
 		return;
 	}
 
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_wrn("%s: Root tag is not an object.", filename);
+		pr_wrn("%s: Root tag is not an object.", json_path);
 		goto end;
 	}
 
-	node = json2node(root);
+	wrt = snprintf(cage_path, 64, "%s/%s", tbl->name, dir->d_name);
+	if (wrt >= 64)
+		pr_panic("collect_meta2: %d %s %s", wrt, tbl->name, dir->d_name);
+
+	node = json2node(root, cage_path);
 	if (node != NULL) {
 		HASH_ADD_KEYPTR_SAFE(tbl->nodes,
 		    uri_str(&node->map.url), uri_len(&node->map.url),
 		    node, old);
 		if (old) {
 			pr_wrn("%s and %s.json are both identified by URI '%s'. "
-			    "Dropping both.", filename, old->map.path,
+			    "Dropping both.", json_path, old->map.path,
 			    uri_str(&node->map.url));
 
-			file_rm_f(filename);
-			file_rm_rf(node->map.path);
+			file_rm_f(json_path);
+			file_rm_rf(cage_path);
 			delete_node(NULL, node, NULL);
 
 			old->flags |= CNF_REJECTED;
 		}
 	} else {
-		pr_wrn("%s: Malformed JSON!", filename);
+		pr_wrn("%s: Malformed JSON!", json_path);
 	}
 
-	pr_clutter("%s: Loaded.", filename);
+	pr_clutter("%s: Loaded.", json_path);
 end:	json_decref(root);
 }
 
