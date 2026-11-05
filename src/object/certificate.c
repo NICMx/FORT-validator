@@ -18,7 +18,6 @@
 #include "log.h"
 #include "nid.h"
 #include "object/aspa.h"
-#include "object/ghostbusters.h"
 #include "object/manifest.h"
 #include "object/roa.h"
 #include "object/signed_object.h"
@@ -1238,7 +1237,6 @@ certificate_get_resources(struct rpki_certificate *cer, enum so_type sot)
 			flags = 0;
 			break;
 		case SOT_MFT:
-		case SOT_GBR:
 			/*
 			 * RFC6487:
 			 *
@@ -2138,8 +2136,6 @@ retry:	vv = querier_downgrade(ca->querier);
 			roa_traverse(vt, map, ca);
 		else if (uri_has_extension(&map->url, ".asa"))
 			aspa_traverse(vt, map, ca);
-		else if (uri_has_extension(&map->url, ".gbr"))
-			ghostbusters_traverse(map, ca);
 	}
 
 	pr_trc("RPP seems salvageable.");

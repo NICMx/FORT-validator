@@ -100,10 +100,6 @@ check_PROGRAMS +=		uthash.test
 uthash_test_SOURCES =		types/uthash_test.c
 uthash_test_LDADD =		${CHECK_LIBS}
 
-check_PROGRAMS +=		vcard.test
-vcard_test_SOURCES =		vcard_test.c
-vcard_test_LDADD =		${CHECK_LIBS}
-
 
 TESTS = ${check_PROGRAMS}
 

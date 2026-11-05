@@ -10,7 +10,6 @@ enum so_type {
 	SOT_ROA = 1,
 	SOT_ASPA,
 	SOT_MFT,
-	SOT_GBR,
 };
 
 struct signed_object {

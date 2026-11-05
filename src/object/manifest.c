@@ -19,7 +19,6 @@ enum file_type {
 	FT_ROA,
 	FT_ASA,
 	FT_MFT,
-	FT_GBR,
 	FT_CER,
 	FT_CRL,
 };
@@ -316,8 +315,6 @@ ext2ft(IA5String_t *file)
 		return FT_ASA;
 	if (ext[0] == 'c' && ext[1] == 'r' && ext[2] == 'l')
 		return FT_CRL;
-	if (ext[0] == 'g' && ext[1] == 'b' && ext[2] == 'r')
-		return FT_GBR;
 
 	return FT_UNK;
 }

@@ -281,7 +281,6 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 		args[i++] = "--include=*/";
 		args[i++] = "--include=*.cer";
 		args[i++] = "--include=*.crl";
-		args[i++] = "--include=*.gbr";
 		args[i++] = "--include=*.mft";
 		args[i++] = "--include=*.roa";
 		args[i++] = "--exclude=*";
