@@ -29,8 +29,6 @@ struct router_key {
 	unsigned char	spk[RK_SPKI_LEN];
 };
 
-typedef int (*router_key_foreach_cb)(struct router_key const *, void *);
-
 void router_key_init(struct router_key *, unsigned char const *, uint32_t,
     unsigned char const *);
 int router_key_print(struct router_key const *, void *);

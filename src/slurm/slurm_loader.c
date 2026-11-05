@@ -15,7 +15,7 @@
 #define SLURM_FILE_EXTENSION	".slurm"
 
 struct slurm_parser_params {
-	struct db_table *db_table;
+	struct vp_table *vpt;
 	struct db_slurm *db_slurm;
 };
 
@@ -60,7 +60,7 @@ slurm_pfx_filters_apply(struct vrp const *vrp, void *arg)
 	struct slurm_parser_params *params = arg;
 
 	if (db_slurm_vrp_is_filtered(params->db_slurm, vrp))
-		db_table_remove_roa(params->db_table, vrp);
+		vpt_rm_vrp(params->vpt, vrp);
 
 	return 0;
 }
@@ -68,7 +68,7 @@ slurm_pfx_filters_apply(struct vrp const *vrp, void *arg)
 static int
 slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 {
-	struct db_table *table = arg;
+	struct vp_table *table = arg;
 	struct ipv4_prefix prefix4;
 	struct ipv6_prefix prefix6;
 	struct vrp vrp;
@@ -80,13 +80,13 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 	if (vrp.addr_fam == AF_INET) {
 		prefix4.addr = vrp.prefix.v4;
 		prefix4.len = vrp.prefix_length;
-		return rtrhandler_handle_roa_v4(table, vrp.asn, &prefix4,
+		return rtrhandler_handle_vrp4(table, vrp.asn, &prefix4,
 		    vrp.max_prefix_length);
 	}
 	if (vrp.addr_fam == AF_INET6) {
 		prefix6.addr = vrp.prefix.v6;
 		prefix6.len = vrp.prefix_length;
-		return rtrhandler_handle_roa_v6(table, vrp.asn, &prefix6,
+		return rtrhandler_handle_vrp6(table, vrp.asn, &prefix6,
 		    vrp.max_prefix_length);
 	}
 
@@ -98,7 +98,7 @@ static int
 slurm_pfx_assertions_apply(struct slurm_parser_params *params)
 {
 	return db_slurm_foreach_assertion_prefix(params->db_slurm,
-	    slurm_pfx_assertions_add, params->db_table);
+	    slurm_pfx_assertions_add, params->vpt);
 }
 
 static int
@@ -107,7 +107,7 @@ slurm_bgpsec_filters_apply(struct router_key const *key, void *arg)
 	struct slurm_parser_params *params = arg;
 
 	if (db_slurm_bgpsec_is_filtered(params->db_slurm, key))
-		db_table_remove_router_key(params->db_table, key);
+		vpt_rm_rk(params->vpt, key);
 
 	return 0;
 }
@@ -115,9 +115,9 @@ slurm_bgpsec_filters_apply(struct router_key const *key, void *arg)
 static int
 slurm_bgpsec_assertions_add(struct slurm_bgpsec *bgpsec, void *arg)
 {
-	struct db_table *table = arg;
+	struct vp_table *table = arg;
 
-	return rtrhandler_handle_router_key(table, bgpsec->ski, bgpsec->asn,
+	return rtrhandler_handle_rk(table, bgpsec->ski, bgpsec->asn,
 	    bgpsec->router_public_key);
 }
 
@@ -125,7 +125,7 @@ static int
 slurm_bgpsec_assertions_apply(struct slurm_parser_params *params)
 {
 	return db_slurm_foreach_assertion_bgpsec(params->db_slurm,
-	    slurm_bgpsec_assertions_add, params->db_table);
+	    slurm_bgpsec_assertions_add, params->vpt);
 }
 
 static int
@@ -265,7 +265,7 @@ success:
 }
 
 int
-slurm_apply(struct db_table *base)
+slurm_apply(struct vp_table *base)
 {
 	struct db_slurm *slurm = NULL;
 	struct slurm_parser_params params;
@@ -283,16 +283,15 @@ slurm_apply(struct db_table *base)
 
 	/* Ok, apply SLURM */
 
-	params.db_table = base;
+	params.vpt = base;
 	params.db_slurm = slurm;
 
 	/* TODO invert this. SLURM rules are few, and base is massive. */
-	error = db_table_foreach_roa(base, slurm_pfx_filters_apply, &params);
+	error = vpt_foreach_vrp(base, slurm_pfx_filters_apply, &params);
 	if (error)
 		goto end;
 
-	error = db_table_foreach_router_key(base, slurm_bgpsec_filters_apply,
-	    &params);
+	error = vpt_foreach_rk(base, slurm_bgpsec_filters_apply, &params);
 	if (error)
 		goto end;
 

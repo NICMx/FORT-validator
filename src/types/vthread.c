@@ -13,33 +13,33 @@ vthreads_create(void)
 	result = pcalloc(n, sizeof(struct validation_thread));
 
 #ifdef THREADS_SHARE_VALIDATION_PAYLOAD
-	result[0].tbl = db_table_create();
+	result[0].tbl = vpt_create();
 	for (t = 1; t < n; t++)
 		result[t].tbl = result[0].tbl;
 #else
 	for (t = 0; t < n; t++)
-		result[t].tbl = db_table_create();
+		result[t].tbl = vpt_create();
 #endif
 
 	return result;
 }
 
-struct db_table *
+struct vp_table *
 vthreads_commit(struct validation_thread *vts)
 {
 	unsigned int t;
-	struct db_table *result;
+	struct vp_table *result;
 
 	result = vts[0].tbl;
 	vts[0].tbl = NULL;
 
 	for (t = 1; t < fortcfg.thread_pool.validation.max; t++) {
 #ifndef THREADS_SHARE_VALIDATION_PAYLOAD
-		if (db_table_join(result, vts[t].tbl) != 0) {
-			db_table_destroy(result);
+		if (vpt_join(result, vts[t].tbl) != 0) {
+			vpt_destroy(result);
 			return NULL;
 		}
-		db_table_destroy(vts[t].tbl);
+		vpt_destroy(vts[t].tbl);
 #endif
 		vts[t].tbl = NULL;
 	}
@@ -51,12 +51,12 @@ void
 vthreads_destroy(struct validation_thread *vts)
 {
 #ifdef THREADS_SHARE_VALIDATION_PAYLOAD
-	db_table_destroy(vts[0]->tbl);
+	vpt_destroy(vts[0]->tbl);
 #else
 	unsigned int t;
 
 	for (t = 0; t < fortcfg.thread_pool.validation.max; t++)
-		db_table_destroy(vts[t].tbl);
+		vpt_destroy(vts[t].tbl);
 #endif
 
 	free(vts);

@@ -48,9 +48,9 @@ check_PROGRAMS +=		common.test
 common_test_SOURCES =		common_test.c
 common_test_LDADD =		${CHECK_LIBS}
 
-check_PROGRAMS +=		db_table.test
-db_table_test_SOURCES =		rtr/db/db_table_test.c
-db_table_test_LDADD =		${CHECK_LIBS}
+check_PROGRAMS +=		vpt.test
+vpt_test_SOURCES =		rtr/db/vpt_test.c
+vpt_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		hash.test
 hash_test_SOURCES =		hash_test.c

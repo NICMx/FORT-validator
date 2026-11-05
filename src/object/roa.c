@@ -63,7 +63,7 @@ ____handle_roa_v4(struct validation_thread *vt, struct resources *parent,
 		    addr2str4(&pfx.addr, buf), pfx.len);
 	}
 
-	return rtrhandler_handle_roa_v4(vt->tbl, asn, &pfx, maxlen);
+	return rtrhandler_handle_vrp4(vt->tbl, asn, &pfx, maxlen);
 }
 
 static int
@@ -111,7 +111,7 @@ ____handle_roa_v6(struct validation_thread *vt, struct resources *parent,
 		    addr2str6(&pfx.addr, buf), pfx.len);
 	}
 
-	return rtrhandler_handle_roa_v6(vt->tbl, asn, &pfx, maxlen);
+	return rtrhandler_handle_vrp6(vt->tbl, asn, &pfx, maxlen);
 }
 
 static int

@@ -3,8 +3,6 @@
 
 /*
  * "VRPs" = "Validated ROA Payloads." See RFC 6811.
- *
- * This module stores VRPs and their serials.
  */
 
 #include "rtr/meta.h"

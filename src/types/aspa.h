@@ -28,8 +28,6 @@ struct aspa {
 	int refs;
 };
 
-typedef int (*aspa_foreach_cb)(struct aspa const *, void *);
-
 void aspa_refget(struct aspa *);
 void aspa_refput(struct aspa *);
 int aspa_print(struct aspa const *, void *);

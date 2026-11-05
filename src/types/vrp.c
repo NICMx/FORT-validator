@@ -44,11 +44,11 @@ vrp_prefix_cov(struct vrp const *a, struct vrp const *b)
 }
 
 int
-vrp_print(struct vrp const *roa, void *arg)
+vrp_print(struct vrp const *vrp, void *arg)
 {
 	char buffer[INET6_ADDRSTRLEN];
-	printf("- [ROA ASN:%u Prefix:%s/(%u-%u)]\n", roa->asn,
-	    inet_ntop(roa->addr_fam, &roa->prefix, buffer, INET6_ADDRSTRLEN),
-	    roa->prefix_length, roa->max_prefix_length);
+	printf("- %s/%u-%u => AS%u\n",
+	    inet_ntop(vrp->addr_fam, &vrp->prefix, buffer, INET6_ADDRSTRLEN),
+	    vrp->prefix_length, vrp->max_prefix_length, vrp->asn);
 	return 0;
 }

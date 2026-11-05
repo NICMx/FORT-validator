@@ -7,11 +7,8 @@
 #include <stdint.h>
 
 /*
- * A ROA payload.
- *
- * I think it's called "VRP" ("Validated ROA Payload") because it was originally
- * meant to represent an already validated ROA, and used exclusively by the RTR
- * code. But it doesn't matter anymore.
+ * Stands for "Validated ROA Payload." Seemingly defined earliest by RFC 6811.
+ * It's one of those "192.0.2.0/24-28 => AS1234" things. Can also be IPv6.
  */
 struct vrp {
 	uint32_t asn;
@@ -23,8 +20,6 @@ struct vrp {
 	uint8_t max_prefix_length;
 	uint8_t addr_fam;
 };
-
-typedef int (*vrp_foreach_cb)(struct vrp const *, void *);
 
 bool vrp_equals(struct vrp const *, struct vrp const *);
 bool vrp_prefix_cov(struct vrp const *, struct vrp const *);

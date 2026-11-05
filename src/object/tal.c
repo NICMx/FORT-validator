@@ -276,12 +276,12 @@ pick_up_work(void *arg)
 	return NULL;
 }
 
-struct db_table *
+struct vp_table *
 perform_standalone_validation(void)
 {
 	struct validation_thread *vts; /* array */
 	unsigned int t;
-	struct db_table *result;
+	struct vp_table *result;
 	int error;
 
 	if (cache_prepare() != 0)
@@ -317,9 +317,9 @@ perform_standalone_validation(void)
 
 //		// FIXME
 //		stats_set_tal_vrps(thread->tal_file, "ipv4",
-//		    db_table_roa_count_v4(thread->db));
+//		    vpt_vrp4_count(thread->db));
 //		stats_set_tal_vrps(thread->tal_file, "ipv6",
-//		    db_table_roa_count_v6(thread->db));
+//		    vpt_vrp6_count(thread->db));
 	}
 
 	vthreads_destroy(vts);

@@ -10,14 +10,14 @@
 #include "types/router_key.c"
 #include "types/serial.c"
 #include "types/vrp.c"
-#include "rtr/db/db_table.c"
+#include "rtr/db/vpt.c"
 
 #define ADDR1 htonl(0xC0000201) /* 192.0.2.1 */
 #define ADDR2 htonl(0xC0000202) /* 192.0.2.2 */
 
-#define TOTAL_ROAS 10
+#define TOTAL_VRPS 10
 #define TOTAL_ASPAS 4
-static bool roas_found[TOTAL_ROAS];
+static bool vrps_found[TOTAL_VRPS];
 static unsigned int total_found;
 
 MOCK_ABORT_VOID(rtridx_init, struct rtr_index *i)
@@ -59,8 +59,8 @@ vrp_equals_v6(struct vrp const *vrp, uint8_t as, uint32_t addr,
 static int
 update_found(array_index index)
 {
-	ck_assert_int_eq(false, roas_found[index]);
-	roas_found[index] = true;
+	ck_assert_int_eq(false, vrps_found[index]);
+	vrps_found[index] = true;
 	total_found++;
 	return 0;
 }
@@ -111,10 +111,10 @@ START_TEST(test_basic_vrp)
 {
 	struct ipv4_prefix prefix4;
 	struct ipv6_prefix prefix6;
-	struct db_table *table;
+	struct vp_table *table;
 	array_index i;
 
-	table = db_table_create();
+	table = vpt_create();
 	ck_assert_ptr_ne(NULL, table);
 
 	prefix4.addr.s_addr = ADDR1;
@@ -123,57 +123,57 @@ START_TEST(test_basic_vrp)
 	prefix6.len = 120;
 
 	/* Duplicates should be transparently not re-added. */
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 32));
 
 	/* Change the AS slightly */
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 11, &prefix4, 32));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 11, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 11, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 11, &prefix4, 32));
 
 	/* Change the prefix slightly */
 	prefix4.addr.s_addr = ADDR2;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 32));
 
 	prefix4.addr.s_addr = ADDR1;
 	prefix4.len = 25;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 32));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 32));
 
 	/* Change the max prefix length (counts as duplicate) */
 	prefix4.len = 24;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 30));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 30));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 30));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(table, 10, &prefix4, 30));
 
 	/* IPv6 */
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 128));
 
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 11, &prefix6, 128));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 11, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 11, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 11, &prefix6, 128));
 
 	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 2);
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 128));
 
 	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
 	prefix6.len = 121;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 128));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 128));
 
 	prefix6.len = 120;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 127));
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 127));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 127));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(table, 10, &prefix6, 127));
 
 	/* Check table contents */
-	memset(roas_found, 0, sizeof(roas_found));
+	memset(vrps_found, 0, sizeof(vrps_found));
 	total_found = 0;
-	ck_assert_int_eq(0, db_table_foreach_roa(table, foreach_vrp_cb, NULL));
-	ck_assert_int_eq(TOTAL_ROAS, total_found);
-	for (i = 0; i < TOTAL_ROAS; i++)
-		ck_assert_int_eq(true, roas_found[i]);
+	ck_assert_int_eq(0, vpt_foreach_vrp(table, foreach_vrp_cb, NULL));
+	ck_assert_int_eq(TOTAL_VRPS, total_found);
+	for (i = 0; i < TOTAL_VRPS; i++)
+		ck_assert_int_eq(true, vrps_found[i]);
 
-	db_table_destroy(table);
+	vpt_destroy(table);
 }
 END_TEST
 
@@ -253,10 +253,10 @@ foreach_aspa_cb(struct aspa const *v, void *arg)
 
 START_TEST(test_basic_aspa)
 {
-	struct db_table *table;
+	struct vp_table *table;
 	array_index i;
 
-	table = db_table_create();
+	table = vpt_create();
 	ck_assert_ptr_ne(NULL, table);
 
 	/* Duplicates should be transparently not re-added. */
@@ -275,14 +275,14 @@ START_TEST(test_basic_aspa)
 	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(4, 600, 800, -1)));
 
 	/* Check table contents */
-	memset(roas_found, 0, sizeof(roas_found));
+	memset(vrps_found, 0, sizeof(vrps_found));
 	total_found = 0;
-	ck_assert_int_eq(0, db_table_foreach_aspa(table, foreach_aspa_cb, NULL));
+	ck_assert_int_eq(0, vpt_foreach_aspa(table, foreach_aspa_cb, NULL));
 	ck_assert_int_eq(TOTAL_ASPAS, total_found);
 	for (i = 0; i < TOTAL_ASPAS; i++)
-		ck_assert_int_eq(true, roas_found[i]);
+		ck_assert_int_eq(true, vrps_found[i]);
 
-	db_table_destroy(table);
+	vpt_destroy(table);
 }
 END_TEST
 

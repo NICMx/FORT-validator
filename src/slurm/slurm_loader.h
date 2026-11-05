@@ -1,10 +1,10 @@
 #ifndef SRC_SLURM_SLURM_LOADER_H_
 #define SRC_SLURM_SLURM_LOADER_H_
 
-#include "rtr/db/db_table.h"
+#include "rtr/db/vpt.h"
 
 /*
- * Load the SLURM file/dir and try to apply it on @db_table.
+ * Load the SLURM file/dir and try to apply it on the vp_table.
  *
  * Return error only when there's a major issue on the process (no memory,
  * SLURM loaded but something happened applying it).
@@ -14,6 +14,6 @@
  * - The SLURM was successfully applied
  * - SLURM configured but couldn't be read (file doesn't exist, no permission)
  */
-int slurm_apply(struct db_table *);
+int slurm_apply(struct vp_table *);
 
 #endif /* SRC_SLURM_SLURM_LOADER_H_ */

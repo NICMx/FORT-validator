@@ -16,30 +16,30 @@
  * - Validates tree
  * - Updates RTR state
  */
-static struct db_table *
+static struct vp_table *
 __vrps_update(void)
 {
-	struct db_table *db;
+	struct vp_table *vpt;
 
-	db = perform_standalone_validation();
-	if (!db)
+	vpt = perform_standalone_validation();
+	if (!vpt)
 		return NULL;
 
 	// XXX The RTR save should happen before the cache cleanup
 
-	if (slurm_apply(db) != 0)
+	if (slurm_apply(vpt) != 0)
 		goto fail;
 
-	db_table_sort(db);
+	vpt_sort(vpt);
 
-	if (db_table_cache(db) != 0)
+	if (vpt_cache(vpt) != 0)
 		goto fail;
 
-	output_print_data(db);
+	output_print_data(vpt);
 
-	return db;
+	return vpt;
 
-fail:	db_table_destroy(db);
+fail:	vpt_destroy(vpt);
 	return NULL;
 }
 
@@ -56,27 +56,27 @@ fail:	db_table_destroy(db);
 int
 vrps_update(struct rtr_metadata *rtr)
 {
-	struct db_table *db;
+	struct vp_table *vpt;
 	time_t start, finish;
 
 	start = time(NULL);
-	db = __vrps_update();
+	vpt = __vrps_update();
 	finish = time(NULL);
 
 	pr_inf("Validation finished:");
-	pr_inf("- Valid ROAs: %u", db_table_roa_count(db));
-	pr_inf("- Valid Router Keys: %u", db_table_router_key_count(db));
-	pr_inf("- Valid ASPAs: %u", db_table_aspa_count(db));
+	pr_inf("- Valid VRPs: %u", vpt_vrp_count(vpt));
+	pr_inf("- Valid Router Keys: %u", vpt_rk_count(vpt));
+	pr_inf("- Valid ASPAs: %u", vpt_aspa_count(vpt));
 	if (fortcfg.mode == SERVER)
-		pr_inf("- Serial: %u", db_table_serial(db));
+		pr_inf("- Serial: %u", vpt_serial(vpt));
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
 		pr_inf("- Real execution time: %.0lfs", difftime(finish, start));
 
 	if (rtr) {
-		rtr->session = db_table_session(db);
-		rtr->serial = db_table_serial(db);
+		rtr->session = vpt_session(vpt);
+		rtr->serial = vpt_serial(vpt);
 	}
 
-	db_table_destroy(db);
-	return db ? 0 : EINVAL;
+	vpt_destroy(vpt);
+	return vpt ? 0 : EINVAL;
 }

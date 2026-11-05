@@ -7,7 +7,7 @@
 #include "common.c"
 #include "file.c"
 #include "mock.c"
-#include "rtr/db/db_table.c"
+#include "rtr/db/vpt.c"
 #include "rtr/err_pdu.c"
 #include "rtr/meta.c"
 #include "rtr/pdu.c"
@@ -46,31 +46,31 @@ static const unsigned char db_imp_spk[] = {
 };
 
 static void
-add_v4(struct db_table *tbl, char const *ip, uint8_t plen, uint8_t mlen, uint32_t as)
+add_v4(struct vp_table *tbl, char const *ip, uint8_t plen, uint8_t mlen, uint32_t as)
 {
 	struct ipv4_prefix pfx = { 0 };
 	ck_assert_int_eq(1, inet_pton(AF_INET, ip, &pfx.addr));
 	pfx.len = plen;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(tbl, as, &pfx, mlen));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp4(tbl, as, &pfx, mlen));
 }
 
 static void
-add_v6(struct db_table *tbl, char const *ip, uint8_t plen, uint8_t mlen, uint32_t as)
+add_v6(struct vp_table *tbl, char const *ip, uint8_t plen, uint8_t mlen, uint32_t as)
 {
 	struct ipv6_prefix pfx = { 0 };
 	ck_assert_int_eq(1, inet_pton(AF_INET6, ip, &pfx.addr));
 	pfx.len = plen;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(tbl, as, &pfx, mlen));
+	ck_assert_int_eq(0, rtrhandler_handle_vrp6(tbl, as, &pfx, mlen));
 }
 
 static void
-add_rk(struct db_table *tbl, uint32_t as)
+add_rk(struct vp_table *tbl, uint32_t as)
 {
-	ck_assert_int_eq(0, rtrhandler_handle_router_key(tbl, db_imp_ski, as, db_imp_spk));
+	ck_assert_int_eq(0, rtrhandler_handle_rk(tbl, db_imp_ski, as, db_imp_spk));
 }
 
 static void
-_add_aspa(struct db_table *tbl, uint32_t customer)
+_add_aspa(struct vp_table *tbl, uint32_t customer)
 {
 	struct aspa *aspa;
 
@@ -87,7 +87,7 @@ _add_aspa(struct db_table *tbl, uint32_t customer)
 }
 
 static void
-mock_resources(struct db_table *tbl, uint32_t as)
+mock_resources(struct vp_table *tbl, uint32_t as)
 {
 	add_v4(tbl, "192.0.2.0", 24, 32, as);
 	add_v6(tbl, "200:db8::", 96, 120, as);
@@ -96,14 +96,14 @@ mock_resources(struct db_table *tbl, uint32_t as)
 }
 
 static uint16_t
-mock_commit(struct db_table *tbl)
+mock_commit(struct vp_table *tbl)
 {
 	uint16_t session;
 
-	db_table_sort(tbl);
-	ck_assert_int_eq(0, db_table_cache(tbl));
+	vpt_sort(tbl);
+	ck_assert_int_eq(0, vpt_cache(tbl));
 	session = tbl->rtr.session;
-	db_table_destroy(tbl);
+	vpt_destroy(tbl);
 
 	return session;
 }
@@ -111,7 +111,7 @@ mock_commit(struct db_table *tbl)
 static uint16_t
 mock_serial1(void)
 {
-	struct db_table *tbl = db_table_create();
+	struct vp_table *tbl = vpt_create();
 	mock_resources(tbl, 1);
 	return mock_commit(tbl);
 }
@@ -119,7 +119,7 @@ mock_serial1(void)
 static void
 mock_serial2(void)
 {
-	struct db_table *tbl = db_table_create();
+	struct vp_table *tbl = vpt_create();
 	mock_resources(tbl, 1);
 	mock_resources(tbl, 2);
 	mock_commit(tbl);
@@ -128,7 +128,7 @@ mock_serial2(void)
 static void
 mock_serial3(void)
 {
-	struct db_table *tbl = db_table_create();
+	struct vp_table *tbl = vpt_create();
 	mock_resources(tbl, 2);
 	mock_commit(tbl);
 }
@@ -136,7 +136,7 @@ mock_serial3(void)
 static void
 mock_serial4(void)
 {
-	struct db_table *tbl = db_table_create();
+	struct vp_table *tbl = vpt_create();
 	mock_resources(tbl, 1);
 	mock_commit(tbl);
 }

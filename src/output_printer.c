@@ -42,7 +42,7 @@ load_output_file(char const *filename, char const *tmpname)
 }
 
 static int
-print_roa_csv(struct vrp const *vrp, void *arg)
+print_vrp_csv(struct vrp const *vrp, void *arg)
 {
 	char addr_buf[INET6_ADDRSTRLEN];
 
@@ -57,7 +57,7 @@ print_roa_csv(struct vrp const *vrp, void *arg)
 }
 
 static int
-print_roa_json(struct vrp const *vrp, void *arg)
+print_vrp_json(struct vrp const *vrp, void *arg)
 {
 	JSON_OUT *json_out = arg;
 	FILE *out;
@@ -186,43 +186,43 @@ get_file_name(char const *pattern, char const *what, char *result)
 }
 
 static void
-print_roas(struct db_table const *db, char *filename)
+print_vrps(struct vp_table const *db, char *filename)
 {
 	FILE *out;
 	JSON_OUT json_out;
 	int error;
 
-	if (!get_file_name(fortcfg.output.vrp_filepath, "output.roa", filename))
+	if (!get_file_name(fortcfg.output.vrp_filepath, "output.vrp", filename))
 		return;
 
-	out = load_output_file(filename, ".roa");
+	out = load_output_file(filename, ".vrp");
 	if (out == NULL)
 		return;
 
 	if (fortcfg.output.vrp_format == OFM_CSV) {
 		fprintf(out, "ASN,Prefix,Max prefix length\n");
-		error = db_table_foreach_roa(db, print_roa_csv, out);
+		error = vpt_foreach_vrp(db, print_vrp_csv, out);
 
 	} else {
 		json_out.file = out;
 		json_out.first = true;
 
-		fprintf(out, "{ \"roas\" : [");
-		error = db_table_foreach_roa(db, print_roa_json, &json_out);
+		fprintf(out, "{ \"vrp\" : [");
+		error = vpt_foreach_vrp(db, print_vrp_json, &json_out);
 		fprintf(out, "\n]}\n");
 	}
 
 	if (error)
-		pr_err("Error printing ROAs: %s", strerror(error));
+		pr_err("Error printing VRPs: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
 		if (!error)
-			file_mv(".roa", filename);
+			file_mv(".vrp", filename);
 	}
 }
 
 static void
-print_router_keys(struct db_table const *db, char *filename)
+print_router_keys(struct vp_table const *db, char *filename)
 {
 	FILE *out;
 	JSON_OUT json_out;
@@ -237,14 +237,14 @@ print_router_keys(struct db_table const *db, char *filename)
 
 	if (fortcfg.output.bgpsec_format == OFM_CSV) {
 		fprintf(out, "ASN,Subject Key Identifier,Subject Public Key Info\n");
-		error = db_table_foreach_router_key(db, print_router_key_csv, out);
+		error = vpt_foreach_rk(db, print_router_key_csv, out);
 
 	} else {
 		json_out.file = out;
 		json_out.first = true;
 
 		fprintf(out, "{ \"router-keys\" : [");
-		error = db_table_foreach_router_key(db, print_router_key_json, &json_out);
+		error = vpt_foreach_rk(db, print_router_key_json, &json_out);
 		fprintf(out, "\n]}\n");
 	}
 
@@ -258,7 +258,7 @@ print_router_keys(struct db_table const *db, char *filename)
 }
 
 static void
-print_aspas(struct db_table const *db, char *filename)
+print_aspas(struct vp_table const *db, char *filename)
 {
 	FILE *out;
 	JSON_OUT json_out;
@@ -275,7 +275,7 @@ print_aspas(struct db_table const *db, char *filename)
 	json_out.first = true;
 
 	fprintf(out, "{ \"aspa\" : {\n");
-	error = db_table_foreach_aspa(db, print_aspa_json, &json_out);
+	error = vpt_foreach_aspa(db, print_aspa_json, &json_out);
 	fprintf(out, "\n}}\n");
 
 	if (error)
@@ -288,10 +288,10 @@ print_aspas(struct db_table const *db, char *filename)
 }
 
 void
-output_print_data(struct db_table const *db)
+output_print_data(struct vp_table const *db)
 {
 	char buf[256];
-	print_roas(db, buf);
+	print_vrps(db, buf);
 	print_router_keys(db, buf);
 	print_aspas(db, buf);
 }
@@ -300,7 +300,7 @@ output_print_data(struct db_table const *db)
 void
 output_atexit(void)
 {
-	unlink(".roa");
+	unlink(".vrp");
 	unlink(".aspa");
 	unlink(".rk");
 }

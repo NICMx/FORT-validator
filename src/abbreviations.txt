@@ -39,10 +39,13 @@ rk: Router Key
 rpp: Repository Publication Point (RFC 6481)
 so: Signed Object
 str: string
+tbl: table
 tmp: temporal
 ts: timestamp
 uint: unsigned int
+vp: Validated Payload
+vpt: Validated Payload Table
 vrp: Validated ROA Payload (RFC 6811)
-vrps: Validated ROA Payloads (VRP database)
+vrps: Validated ROA Payloads
 
 Single-character variables are always generic counters.

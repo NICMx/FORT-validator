@@ -1,4 +1,4 @@
-#include "rtr/db/db_table.h"
+#include "rtr/db/vpt.h"
 
 #include "alloc.h"
 #include "common.h"
@@ -9,7 +9,7 @@
 #include "types/array.h"
 #include "types/uthash.h"
 
-struct hashable_roa {
+struct hashable_vrp {
 	struct vrp data;
 	UT_hash_handle hh;
 };
@@ -25,29 +25,33 @@ struct hashable_aspa {
 };
 
 /*
- * XXX this needs a better name.
- * "validated_payload"? (Like VRP, minus "ROA")
- * "verified_payload"?
+ * The dataset that results from a validation cycle.
+ * It's a bunch of validated data we pile up and clean up to later serve to RTR
+ * clients.
+ *
+ * The name stands for "validated payload table."
+ * Think of it like "VRP table," minus the 'R' to convey it's not just ROA
+ * payload.
  */
-struct db_table {
-	struct hashable_roa *roas;
+struct vp_table {
+	struct hashable_vrp *vrps;
 	struct hashable_key *router_keys;
 	struct hashable_aspa *aspas;
 
-	unsigned int total_roas_v4;
-	unsigned int total_roas_v6;
+	unsigned int total_vrps_v4;
+	unsigned int total_vrps_v6;
 
 	struct rtr_index rtr;
 
 	pthread_mutex_t lock;
 };
 
-struct db_table *
-db_table_create(void)
+struct vp_table *
+vpt_create(void)
 {
-	struct db_table *table;
+	struct vp_table *table;
 
-	table = pzalloc(sizeof(struct db_table));
+	table = pzalloc(sizeof(struct vp_table));
 	panic_on_fail(pthread_mutex_init(&table->lock, NULL),
 	    "pthread_mutex_init");
 
@@ -55,18 +59,18 @@ db_table_create(void)
 }
 
 void
-db_table_destroy(struct db_table *table)
+vpt_destroy(struct vp_table *table)
 {
-	struct hashable_roa *roa, *tmpr;
+	struct hashable_vrp *vrp, *tmpv;
 	struct hashable_key *rk, *tmpk;
 	struct hashable_aspa *aspa, *tmpa;
 
 	if (table == NULL)
 		return;
 
-	HASH_ITER(hh, table->roas, roa, tmpr) {
-		HASH_DEL(table->roas, roa);
-		free(roa);
+	HASH_ITER(hh, table->vrps, vrp, tmpv) {
+		HASH_DEL(table->vrps, vrp);
+		free(vrp);
 	}
 
 	HASH_ITER(hh, table->router_keys, rk, tmpk) {
@@ -88,29 +92,29 @@ db_table_destroy(struct db_table *table)
 }
 
 static int
-add_roa(struct db_table *table, struct hashable_roa *new)
+add_vrp(struct vp_table *table, struct hashable_vrp *new)
 {
-	struct hashable_roa *old;
+	struct hashable_vrp *old;
 	int error;
 
 	mutex_lock(&table->lock);
 
 	errno = 0;
-	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
+	HASH_REPLACE(hh, table->vrps, data, sizeof(new->data), new, old);
 	error = errno;
 
 	mutex_unlock(&table->lock);
 
 	if (error) {
-		pr_err("ROA couldn't be added to hash table: %s",
+		pr_err("VRP couldn't be added to hash table: %s",
 		    strerror(error));
 		return error;
 	}
 
 	if (old == NULL) {
 		switch (new->data.addr_fam) {
-		case AF_INET:	table->total_roas_v4++; break;
-		case AF_INET6:	table->total_roas_v6++; break;
+		case AF_INET:	table->total_vrps_v4++; break;
+		case AF_INET6:	table->total_vrps_v6++; break;
 		}
 	} else {
 		free(old);
@@ -120,7 +124,7 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 }
 
 static int
-add_router_key(struct db_table *table, struct hashable_key *new)
+add_router_key(struct vp_table *table, struct hashable_key *new)
 {
 	struct hashable_key *old;
 	int error;
@@ -201,7 +205,7 @@ merge_providers(struct aspa_providers *old, struct aspa_providers *new)
 }
 
 static int
-add_aspa(struct db_table *table, struct hashable_aspa *new)
+add_aspa(struct vp_table *table, struct hashable_aspa *new)
 {
 	struct hashable_aspa *old;
 	struct aspa_providers merge;
@@ -235,18 +239,18 @@ add_aspa(struct db_table *table, struct hashable_aspa *new)
 
 /* Moves the content from @src into @dst. */
 int
-db_table_join(struct db_table *dst, struct db_table *src)
+vpt_join(struct vp_table *dst, struct vp_table *src)
 {
-	struct hashable_roa *roa, *tmpr;
+	struct hashable_vrp *vrp, *tmpv;
 	struct hashable_key *rk, *tmpk;
 	struct hashable_aspa *aspa, *tmpa;
 	int error;
 
-	HASH_ITER(hh, src->roas, roa, tmpr) {
-		HASH_DEL(src->roas, roa);
-		error = add_roa(dst, roa);
+	HASH_ITER(hh, src->vrps, vrp, tmpv) {
+		HASH_DEL(src->vrps, vrp);
+		error = add_vrp(dst, vrp);
 		if (error) {
-			free(roa);
+			free(vrp);
 			return error;
 		}
 	}
@@ -294,7 +298,7 @@ cmp_u32(uint32_t a, uint32_t b)
 }
 
 static int
-cmp_vrp(struct hashable_roa *_a, struct hashable_roa *_b)
+cmp_vrp(struct hashable_vrp *_a, struct hashable_vrp *_b)
 {
 	struct vrp *a = &_a->data;
 	struct vrp *b = &_b->data;
@@ -339,9 +343,9 @@ cmp_aspa(struct hashable_aspa *a, struct hashable_aspa *b)
 }
 
 void
-db_table_sort(struct db_table *table)
+vpt_sort(struct vp_table *table)
 {
-	HASH_SORT(table->roas, cmp_vrp);
+	HASH_SORT(table->vrps, cmp_vrp);
 	HASH_SORT(table->router_keys, cmp_rk);
 	HASH_SORT(table->aspas, cmp_aspa);
 }
@@ -382,12 +386,12 @@ write_addr(FILE *file, struct vrp *vrp)
 }
 
 static int
-cache_vrps(struct db_table *table, serial_t serial)
+cache_vrps(struct vp_table *table, serial_t serial)
 {
 	FILE *f4 = NULL;
 	FILE *f6 = NULL;
 	FILE *file;
-	struct hashable_roa *hvrp, *tmpv;
+	struct hashable_vrp *hvrp, *tmpv;
 	struct vrp *vrp;
 	int err;
 
@@ -398,7 +402,7 @@ cache_vrps(struct db_table *table, serial_t serial)
 	if (err)
 		goto end;
 
-	HASH_ITER(hh, table->roas, hvrp, tmpv) {
+	HASH_ITER(hh, table->vrps, hvrp, tmpv) {
 		vrp = &hvrp->data;
 
 		switch (vrp->addr_fam) {
@@ -423,7 +427,7 @@ end:	if (f4) fclose(f4);
 }
 
 static int
-cache_rks(struct db_table *table, serial_t serial)
+cache_rks(struct vp_table *table, serial_t serial)
 {
 	FILE *file = NULL;
 	struct hashable_key *rk, *tmpr;
@@ -447,7 +451,7 @@ cache_rks(struct db_table *table, serial_t serial)
 }
 
 static int
-cache_aspas(struct db_table *table, serial_t serial)
+cache_aspas(struct vp_table *table, serial_t serial)
 {
 	FILE *file = NULL;
 	struct hashable_aspa *aspa, *tmpa;
@@ -473,7 +477,7 @@ cache_aspas(struct db_table *table, serial_t serial)
 }
 
 static int
-cache_metadata(struct db_table *table)
+cache_metadata(struct vp_table *table)
 {
 	int error;
 
@@ -487,7 +491,7 @@ cache_metadata(struct db_table *table)
 }
 
 int
-db_table_cache(struct db_table *table)
+vpt_cache(struct vp_table *table)
 {
 	char path[SERIAL_DIR_MAXSIZE];
 	serial_t serial;
@@ -535,12 +539,12 @@ fail:	file_rm_rf(path);
 }
 
 int
-db_table_foreach_roa(struct db_table const *table, vrp_foreach_cb cb, void *arg)
+vpt_foreach_vrp(struct vp_table const *table, vrp_foreach_cb cb, void *arg)
 {
-	struct hashable_roa *node, *tmp;
+	struct hashable_vrp *node, *tmp;
 	int error;
 
-	HASH_ITER(hh, table->roas, node, tmp) {
+	HASH_ITER(hh, table->vrps, node, tmp) {
 		error = cb(&node->data, arg);
 		if (error)
 			return error;
@@ -550,8 +554,7 @@ db_table_foreach_roa(struct db_table const *table, vrp_foreach_cb cb, void *arg)
 }
 
 int
-db_table_foreach_router_key(struct db_table const *table,
-    router_key_foreach_cb cb, void *arg)
+vpt_foreach_rk(struct vp_table const *table, rk_foreach_cb cb, void *arg)
 {
 	struct hashable_key *node, *tmp;
 	int error;
@@ -566,8 +569,7 @@ db_table_foreach_router_key(struct db_table const *table,
 }
 
 int
-db_table_foreach_aspa(struct db_table const *table, aspa_foreach_cb cb,
-    void *arg)
+vpt_foreach_aspa(struct vp_table const *table, aspa_foreach_cb cb, void *arg)
 {
 	struct hashable_aspa *node, *tmp;
 	int error;
@@ -582,61 +584,61 @@ db_table_foreach_aspa(struct db_table const *table, aspa_foreach_cb cb,
 }
 
 unsigned int
-db_table_roa_count(struct db_table *table)
+vpt_vrp_count(struct vp_table *table)
 {
-	return table ? HASH_COUNT(table->roas) : 0;
+	return table ? HASH_COUNT(table->vrps) : 0;
 }
 
 unsigned int
-db_table_roa_count_v4(struct db_table *table)
+vpt_vrp4_count(struct vp_table *table)
 {
-	return table ? table->total_roas_v4 : 0;
+	return table ? table->total_vrps_v4 : 0;
 }
 
 unsigned int
-db_table_roa_count_v6(struct db_table *table)
+vpt_vrp6_count(struct vp_table *table)
 {
-	return table ? table->total_roas_v6 : 0;
+	return table ? table->total_vrps_v6 : 0;
 }
 
 unsigned int
-db_table_router_key_count(struct db_table *table)
+vpt_rk_count(struct vp_table *table)
 {
 	return table ? HASH_COUNT(table->router_keys) : 0;
 }
 
 unsigned int
-db_table_aspa_count(struct db_table *table)
+vpt_aspa_count(struct vp_table *table)
 {
 	return table ? HASH_COUNT(table->aspas) : 0;
 }
 
 uint16_t
-db_table_session(struct db_table *table)
+vpt_session(struct vp_table *table)
 {
 	return table ? table->rtr.session : 0;
 }
 
 serial_t
-db_table_serial(struct db_table *table)
+vpt_serial(struct vp_table *table)
 {
 	return (table && table->rtr.serials) ? table->rtr.serials->serial : 0;
 }
 
 void
-db_table_remove_roa(struct db_table *table, struct vrp const *del)
+vpt_rm_vrp(struct vp_table *table, struct vrp const *del)
 {
-	struct hashable_roa *ptr;
+	struct hashable_vrp *ptr;
 
-	HASH_FIND(hh, table->roas, del, sizeof(*del), ptr);
+	HASH_FIND(hh, table->vrps, del, sizeof(*del), ptr);
 	if (ptr != NULL) {
-		HASH_DELETE(hh, table->roas, ptr);
+		HASH_DELETE(hh, table->vrps, ptr);
 		free(ptr);
 	}
 }
 
 void
-db_table_remove_router_key(struct db_table *table,
+vpt_rm_rk(struct vp_table *table,
     struct router_key const *del)
 {
 	struct hashable_key *ptr;
@@ -658,43 +660,43 @@ trc_vrp(struct vrp *vrp)
 }
 
 int
-rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
+rtrhandler_handle_vrp4(struct vp_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
 {
-	struct hashable_roa *roa = pzalloc(sizeof(struct hashable_roa));
+	struct hashable_vrp *vrp = pzalloc(sizeof(struct hashable_vrp));
 
-	roa->data.asn = asn;
-	roa->data.prefix.v4 = prefix4->addr;
-	roa->data.prefix_length = prefix4->len;
-	roa->data.max_prefix_length = max_length;
-	roa->data.addr_fam = AF_INET;
+	vrp->data.asn = asn;
+	vrp->data.prefix.v4 = prefix4->addr;
+	vrp->data.prefix_length = prefix4->len;
+	vrp->data.max_prefix_length = max_length;
+	vrp->data.addr_fam = AF_INET;
 
 	if (pr_trc_enabled())
-		trc_vrp(&roa->data);
+		trc_vrp(&vrp->data);
 
-	return add_roa(table, roa);
+	return add_vrp(table, vrp);
 }
 
 int
-rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
+rtrhandler_handle_vrp6(struct vp_table *table, uint32_t asn,
     struct ipv6_prefix const *prefix6, uint8_t max_length)
 {
-	struct hashable_roa *roa = pzalloc(sizeof(struct hashable_roa));
+	struct hashable_vrp *vrp = pzalloc(sizeof(struct hashable_vrp));
 
-	roa->data.asn = asn;
-	roa->data.prefix.v6 = prefix6->addr;
-	roa->data.prefix_length = prefix6->len;
-	roa->data.max_prefix_length = max_length;
-	roa->data.addr_fam = AF_INET6;
+	vrp->data.asn = asn;
+	vrp->data.prefix.v6 = prefix6->addr;
+	vrp->data.prefix_length = prefix6->len;
+	vrp->data.max_prefix_length = max_length;
+	vrp->data.addr_fam = AF_INET6;
 
 	if (pr_trc_enabled())
-		trc_vrp(&roa->data);
+		trc_vrp(&vrp->data);
 
-	return add_roa(table, roa);
+	return add_vrp(table, vrp);
 }
 
 int
-rtrhandler_handle_router_key(struct db_table *table, unsigned char const *ski,
+rtrhandler_handle_rk(struct vp_table *table, unsigned char const *ski,
     uint32_t as, unsigned char const *spk)
 {
 	struct hashable_key *key;
@@ -712,7 +714,7 @@ rtrhandler_handle_router_key(struct db_table *table, unsigned char const *ski,
 }
 
 int
-rtrhandler_handle_aspa(struct db_table *table, struct aspa *v)
+rtrhandler_handle_aspa(struct vp_table *table, struct aspa *v)
 {
 	struct hashable_aspa *aspa;
 	int error;
