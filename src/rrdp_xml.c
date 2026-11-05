@@ -1379,7 +1379,6 @@ validate_hash(struct rrdp_xml_reader *rdr)
 	/* rfc8181#section-2.2 */
 	if (fileref) {
 		if (!rdr->c.sd.file.hash.set) {
-			// XXX watch out for this in the log before release
 			pr_err("(Line %u) RRDP desync: "
 			    "<publish> is attempting to create '%s', "
 			    "but the file is already cached.",
@@ -1395,7 +1394,6 @@ validate_hash(struct rrdp_xml_reader *rdr)
 
 	} else {
 		if (rdr->c.sd.file.hash.set) {
-			// XXX watch out for this in the log before release
 			pr_err("(Line %u) RRDP desync: "
 			    "<publish> is attempting to overwrite '%s', "
 			    "but the file is absent in the cache.",
