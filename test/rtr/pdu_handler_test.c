@@ -13,6 +13,7 @@
 #include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
 #include "types/aspa.c"
+#include "types/path.c"
 #include "types/router_key.c"
 #include "types/serial.c"
 

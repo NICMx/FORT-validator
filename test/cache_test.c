@@ -30,7 +30,7 @@ ck_json(struct cache_node const *src)
 	json_dumpf(json, stdout, JSON_INDENT(2));
 	printf("\n");
 	ck_assert_ptr_ne(NULL, json);
-	dst = json2node(json);
+	dst = json2node(json, src->map.path);
 	json_decref(json);
 
 	ck_assert_uri(uri_str(&src->map.url), &dst->map.url);
