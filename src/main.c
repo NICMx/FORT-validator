@@ -12,13 +12,189 @@
 #include "nid.h"
 #include "output_printer.h"
 #include "prometheus.h"
+#include "report.h"
 #include "rsync.h"
-#include "rtr/db/vrps.h"
 #include "rtr/rtr.h"
 #include "sig.h"
+#include "slurm/slurm_loader.h"
 #include "stats.h"
 #include "task.h"
 #include "thread_var.h"
+
+static int
+queue_tal(char const *tal_path, void *arg)
+{
+	if (task_enqueue_tal(tal_path) < 1) {
+		pr_err("Could not enqueue task '%s'; abandoning validation.",
+		    tal_path);
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static void *
+pick_up_work(void *arg)
+{
+	struct validation_task *task = NULL;
+	struct validation_thread *vt = arg;
+	validation_verdict vv;
+
+	while ((task = task_dequeue(task)) != NULL) {
+		pr_trc("Dequeued task: %s", task_name(task));
+
+		switch (task->type) {
+		case VTT_RPP:
+			vv = cer_traverse(vt, task->u.ca);
+			if (vv == VV_BUSY) {
+				task_requeue_dormant(task);
+				task = NULL;
+			}
+			break;
+		case VTT_TAL:
+			vv = traverse_tal(vt, task->u.tal);
+			if (vv == VV_BUSY) {
+				task_requeue_dormant(task);
+				task = NULL;
+			} else if (vv == VV_FAIL) {
+				task_cancel();
+			}
+			break;
+		default:
+			vv = VV_FAIL;
+		}
+
+		pr_trc("Task ended. Status: %s", vv);
+	}
+
+	return NULL;
+}
+
+struct vp_table *
+perform_standalone_validation(void)
+{
+	struct validation_thread *vts; /* array */
+	unsigned int t;
+	struct vp_table *result;
+	int error;
+
+	if (cache_prepare() != 0)
+		return NULL;
+
+	result = NULL;
+	task_start();
+
+	if (foreach_file(fortcfg.tal, ".tal", true, queue_tal, NULL) != 0)
+		goto end;
+
+	if (report_enable() != 0)
+		goto end;
+
+	vts = vthreads_create();
+
+	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
+		error = pthread_create(&vts[t].id, NULL, pick_up_work, &vts[t]);
+		if (error)
+			pr_panic("pthread_create(%u) failed: %s",
+			    t, strerror(error));
+	}
+
+	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
+		error = pthread_join(vts[t].id, NULL);
+		if (error)
+			pr_panic("pthread_join(%u) failed: %s",
+			    t, strerror(error));
+	}
+
+	if (!task_stopped()) {
+		result = vthreads_commit(vts); /* Can return NULL! */
+
+//		// FIXME
+//		stats_set_tal_vrps(thread->tal_file, "ipv4",
+//		    vpt_vrp4_count(thread->db));
+//		stats_set_tal_vrps(thread->tal_file, "ipv6",
+//		    vpt_vrp6_count(thread->db));
+	}
+
+	vthreads_destroy(vts);
+	report_disable();
+	fnstack_cleanup(); // XXX there's no init?
+	cache_commit();
+end:	task_stop();
+	return result;
+}
+
+/*
+ * High level validator function.
+ *
+ * - Downloads tree
+ * - Validates tree
+ * - Updates RTR state
+ */
+static struct vp_table *
+__vrps_update(void)
+{
+	struct vp_table *vpt;
+
+	vpt = perform_standalone_validation();
+	if (!vpt)
+		return NULL;
+
+	// XXX The RTR save should happen before the cache cleanup
+
+	if (slurm_apply(vpt) != 0)
+		goto fail;
+
+	vpt_sort(vpt);
+
+	if (vpt_cache(vpt) != 0)
+		goto fail;
+
+	output_print_data(vpt);
+
+	return vpt;
+
+fail:	vpt_destroy(vpt);
+	return NULL;
+}
+
+/*
+ * Highest level validator function.
+ *
+ * - Downloads tree
+ * - Validates tree
+ * - Updates RTR state
+ * - Logs status
+ *
+ * TODO (#50) remove this wrapper once Prometheus is implemented
+ */
+int
+vrps_update(struct rtr_metadata *rtr)
+{
+	struct vp_table *vpt;
+	time_t start, finish;
+
+	start = time(NULL);
+	vpt = __vrps_update();
+	finish = time(NULL);
+
+	pr_inf("Validation finished:");
+	pr_inf("- Valid VRPs: %u", vpt_vrp_count(vpt));
+	pr_inf("- Valid Router Keys: %u", vpt_rk_count(vpt));
+	pr_inf("- Valid ASPAs: %u", vpt_aspa_count(vpt));
+	if (fortcfg.mode == SERVER)
+		pr_inf("- Serial: %u", vpt_serial(vpt));
+	if (start != ((time_t) -1) && finish != ((time_t) -1))
+		pr_inf("- Real execution time: %.0lfs", difftime(finish, start));
+
+	if (rtr) {
+		rtr->session = vpt_session(vpt);
+		rtr->serial = vpt_serial(vpt);
+	}
+
+	vpt_destroy(vpt);
+	return vpt ? 0 : EINVAL;
+}
 
 static int
 fort_standalone(void)

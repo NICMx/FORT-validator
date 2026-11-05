@@ -7,11 +7,9 @@
 #include "file.h"
 #include "log.h"
 #include "object/certificate.h"
-#include "report.h"
 #include "task.h"
 #include "thread_var.h"
 #include "types/path.h"
-#include "types/vthread.h"
 
 static char *
 find_newline(char *str)
@@ -127,18 +125,6 @@ tal_cleanup(struct tal *tal)
 	}
 }
 
-static int
-queue_tal(char const *tal_path, void *arg)
-{
-	if (task_enqueue_tal(tal_path) < 1) {
-		pr_err("Could not enqueue task '%s'; abandoning validation.",
-		    tal_path);
-		return EINVAL;
-	}
-
-	return 0;
-}
-
 static validation_verdict
 validate_ta(struct validation_thread *vt, struct tal *tal,
     struct cache_mapping const *ta_map)
@@ -198,7 +184,7 @@ try_urls(struct validation_thread *vt, struct tal *tal, char const *proto,
 	return VV_FAIL;
 }
 
-static validation_verdict
+validation_verdict
 traverse_tal(struct validation_thread *vt, char const *path)
 {
 	struct tal *tal;
@@ -237,95 +223,4 @@ traverse_tal(struct validation_thread *vt, char const *path)
 end2:	tal_cleanup(tal);
 end1:	fnstack_pop();
 	return vv;
-}
-
-static void *
-pick_up_work(void *arg)
-{
-	struct validation_task *task = NULL;
-	struct validation_thread *vt = arg;
-	validation_verdict vv;
-
-	while ((task = task_dequeue(task)) != NULL) {
-		pr_trc("Dequeued task: %s", task_name(task));
-
-		switch (task->type) {
-		case VTT_RPP:
-			vv = cer_traverse(vt, task->u.ca);
-			if (vv == VV_BUSY) {
-				task_requeue_dormant(task);
-				task = NULL;
-			}
-			break;
-		case VTT_TAL:
-			vv = traverse_tal(vt, task->u.tal);
-			if (vv == VV_BUSY) {
-				task_requeue_dormant(task);
-				task = NULL;
-			} else if (vv == VV_FAIL) {
-				task_cancel();
-			}
-			break;
-		default:
-			vv = VV_FAIL;
-		}
-
-		pr_trc("Task ended. Status: %s", vv);
-	}
-
-	return NULL;
-}
-
-struct vp_table *
-perform_standalone_validation(void)
-{
-	struct validation_thread *vts; /* array */
-	unsigned int t;
-	struct vp_table *result;
-	int error;
-
-	if (cache_prepare() != 0)
-		return NULL;
-
-	result = NULL;
-	task_start();
-
-	if (foreach_file(fortcfg.tal, ".tal", true, queue_tal, NULL) != 0)
-		goto end;
-
-	if (report_enable() != 0)
-		goto end;
-
-	vts = vthreads_create();
-
-	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
-		error = pthread_create(&vts[t].id, NULL, pick_up_work, &vts[t]);
-		if (error)
-			pr_panic("pthread_create(%u) failed: %s",
-			    t, strerror(error));
-	}
-
-	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
-		error = pthread_join(vts[t].id, NULL);
-		if (error)
-			pr_panic("pthread_join(%u) failed: %s",
-			    t, strerror(error));
-	}
-
-	if (!task_stopped()) {
-		result = vthreads_commit(vts); /* Can return NULL! */
-
-//		// FIXME
-//		stats_set_tal_vrps(thread->tal_file, "ipv4",
-//		    vpt_vrp4_count(thread->db));
-//		stats_set_tal_vrps(thread->tal_file, "ipv6",
-//		    vpt_vrp6_count(thread->db));
-	}
-
-	vthreads_destroy(vts);
-	report_disable();
-	fnstack_cleanup(); // XXX there's no init?
-	cache_commit();
-end:	task_stop();
-	return result;
 }

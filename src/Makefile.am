@@ -56,7 +56,6 @@ fort_SOURCES += rrdp.h rrdp.c
 fort_SOURCES += rrdp_xml.h rrdp_xml.c
 fort_SOURCES += rsync.h rsync.c
 fort_SOURCES += rtr/db/vpt.c rtr/db/vpt.h
-fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
 fort_SOURCES += rtr/meta.c rtr/meta.h
 fort_SOURCES += rtr/pdu.c rtr/pdu.h

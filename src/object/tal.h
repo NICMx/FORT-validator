@@ -4,8 +4,10 @@
 #include <stdatomic.h>
 #include <stddef.h>
 
+#include "common.h"
 #include "rtr/db/vpt.h"
 #include "types/uri.h"
+#include "types/vthread.h"
 
 /* This is RFC 8630. */
 
@@ -18,7 +20,7 @@ struct tal {
 	atomic_uint refcount;
 };
 
-struct vp_table *perform_standalone_validation(void);
+validation_verdict traverse_tal(struct validation_thread *, char const *);
 
 void tal_cleanup(struct tal *);
 
