@@ -118,12 +118,6 @@ typedef asn_enc_rval_t(der_type_encoder_f)(
     void *app_key /* Arbitrary callback argument */
 );
 
-/* Encodes a structure into a JSON. */
-typedef json_t *(json_type_encoder_f)(
-    const struct asn_TYPE_descriptor_s *type_descriptor,
-    const void *struct_ptr /* Structure to be encoded */
-);
-
 /* Encodes a structure into an XML stream. */
 typedef asn_enc_rval_t(xer_type_encoder_f)(
     const struct asn_TYPE_descriptor_s *type_descriptor,
@@ -191,7 +185,6 @@ typedef struct asn_TYPE_operation_s {
     asn_struct_compare_f *compare_struct; /* Compare two structures */
     ber_type_decoder_f *ber_decoder;      /* Generic BER decoder */
     der_type_encoder_f *der_encoder;      /* Canonical DER encoder */
-    json_type_encoder_f *json_encoder;
     xer_type_encoder_f *xer_encoder;      /* [Canonical] XER encoder */
     asn_outmost_tag_f *outmost_tag;       /* <optional, internal> */
 } asn_TYPE_operation_t;

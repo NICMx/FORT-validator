@@ -10,9 +10,10 @@
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
+#include <string.h>
 
+#include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/asn_internal.h"
-#include "json_util.h"
 
 /*
  * OBJECT IDENTIFIER basic type description.
@@ -26,7 +27,6 @@ asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER = {
 	OCTET_STRING_compare,   /* Implemented in terms of a string comparison */
 	ber_decode_primitive,
 	der_encode_primitive,
-	OBJECT_IDENTIFIER_encode_json,
 	OBJECT_IDENTIFIER_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -274,18 +274,6 @@ OBJECT_IDENTIFIER_to_string(OBJECT_IDENTIFIER_t const *oid, char *buf)
 
 	sn = OBJ_nid2sn(OBJECT_IDENTIFIER_to_nid(oid));
 	return (sn != NULL) ? sn : OBJECT_IDENTIFIER_to_literal(oid, buf);
-}
-
-json_t *
-OBJECT_IDENTIFIER_encode_json(const struct asn_TYPE_descriptor_s *td,
-    const void *sptr)
-{
-	const OBJECT_IDENTIFIER_t *oid = sptr;
-	char buf[OID_STR_MAXLEN];
-	char const *string;
-
-	string = OBJECT_IDENTIFIER_to_string(oid, buf);
-	return (string != NULL) ? json_str_new(string) : NULL;
 }
 
 ssize_t

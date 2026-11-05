@@ -10,10 +10,10 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/xer_encoder.h"
-#include "json_util.h"
 
 #define	ATZVARS do {							\
 	char tzoldbuf[64];						\
@@ -61,7 +61,6 @@ asn_TYPE_operation_t asn_OP_GeneralizedTime = {
 	GeneralizedTime_compare,
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	GeneralizedTime_encode_der,
-	GeneralizedTime_encode_json,
 	GeneralizedTime_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -137,21 +136,6 @@ GeneralizedTime_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
     ASN_STRUCT_FREE(*td, st);
 
     return erval;
-}
-
-json_t *
-GeneralizedTime_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
-{
-	const GeneralizedTime_t *st = (const GeneralizedTime_t *)sptr;
-	char buf[ASN_TM_STR_MAXLEN];
-
-	if (st == NULL || st->buf == NULL)
-		return json_null();
-
-	if (GeneralizedTime2str(st, buf) < 0)
-		return NULL;
-
-	return json_str_new(buf);
 }
 
 #ifndef	ASN___INTERNAL_TEST_MODE

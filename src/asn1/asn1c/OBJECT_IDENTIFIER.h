@@ -19,7 +19,6 @@ extern asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER;
 asn_struct_print_f OBJECT_IDENTIFIER_print;
 asn_constr_check_f OBJECT_IDENTIFIER_constraint;
 der_type_encoder_f OBJECT_IDENTIFIER_encode_der;
-json_type_encoder_f OBJECT_IDENTIFIER_encode_json;
 xer_type_encoder_f OBJECT_IDENTIFIER_encode_xer;
 
 #define OBJECT_IDENTIFIER_free           ASN__PRIMITIVE_TYPE_free

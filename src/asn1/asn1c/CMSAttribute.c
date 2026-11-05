@@ -13,56 +13,6 @@
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SigningTime.h"
 #include "asn1/asn1c/constr_SET_OF.h"
-#include "json_util.h"
-
-static json_t *
-CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
-{
-	struct CMSAttribute const *cattr = sptr;
-	json_t *root;
-	json_t *array;
-	json_t *tmp;
-	int a;
-
-	if (!cattr)
-		return json_null();
-
-	root = json_obj_new();
-	if (root == NULL)
-		return NULL;
-
-	tmp = OBJECT_IDENTIFIER_encode_json(NULL, &cattr->attrType);
-	if (json_object_add(root, "attrType", tmp))
-		goto fail;
-	if (json_object_add(root, "attrValues", array = json_array_new()))
-		goto fail;
-
-	switch (OBJECT_IDENTIFIER_to_nid(&cattr->attrType)) {
-	case NID_pkcs9_contentType:
-		td = &asn_DEF_ContentType;
-		break;
-	case NID_pkcs9_messageDigest:
-		td = &asn_DEF_MessageDigest;
-		break;
-	case NID_pkcs9_signingTime:
-		td = &asn_DEF_SigningTime;
-		break;
-	default:
-		td = &asn_DEF_ANY;
-		break;
-	}
-
-	for (a = 0; a < cattr->attrValues.list.count; a++) {
-		tmp = ANY_to_json(td, cattr->attrValues.list.array[a]);
-		if (json_array_add(array, tmp))
-			goto fail;
-	}
-
-	return root;
-
-fail:	json_decref(root);
-	return NULL;
-}
 
 static asn_TYPE_operation_t asn_OP_CMSAttribute = {
 	SEQUENCE_free,
@@ -70,7 +20,6 @@ static asn_TYPE_operation_t asn_OP_CMSAttribute = {
 	SEQUENCE_compare,
 	SEQUENCE_decode_ber,
 	SEQUENCE_encode_der,
-	CMSAttribute_encode_json,
 	SEQUENCE_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };

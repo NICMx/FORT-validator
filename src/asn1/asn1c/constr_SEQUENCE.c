@@ -7,13 +7,14 @@
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/OPEN_TYPE.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/constraints.h"
 #include "asn1/asn1c/der_encoder.h"
 #include "asn1/asn1c/xer_encoder.h"
-#include "json_util.h"
 
 /*
  * Number of bytes left for this structure.
@@ -616,42 +617,6 @@ SEQUENCE_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 	ASN__ENCODED_OK(erval);
 }
 
-json_t *
-SEQUENCE_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
-{
-	json_t *parent;
-	json_t *child;
-	size_t c;
-
-	if (!sptr)
-		return json_null();
-
-	parent = json_obj_new();
-	if (parent == NULL)
-		return NULL;
-
-	for (c = 0; c < td->elements_count; c++) {
-		asn_TYPE_member_t *elm = &td->elements[c];
-		const void *memb_ptr;
-
-		memb_ptr = get_member(sptr, elm);
-		if (!memb_ptr) {
-			if (elm->optional)
-				continue;
-			/* Fall through */
-		}
-
-		child = elm->type->op->json_encoder(elm->type, memb_ptr);
-		if (json_object_add(parent, elm->name, child))
-			goto fail;
-	}
-
-	return parent;
-
-fail:	json_decref(parent);
-	return NULL;
-}
-
 asn_enc_rval_t
 SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
                     int ilevel, int flags,
@@ -896,7 +861,6 @@ asn_TYPE_operation_t asn_OP_SEQUENCE = {
 	SEQUENCE_compare,
 	SEQUENCE_decode_ber,
 	SEQUENCE_encode_der,
-	SEQUENCE_encode_json,
 	SEQUENCE_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };

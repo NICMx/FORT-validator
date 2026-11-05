@@ -11,7 +11,6 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"
 #include "asn1/asn1c/der_encoder.h"
-#include "asn1/asn1c/json_encoder.h"
 #include "asn1/asn1c/xer_encoder.h"
 
 asn_OCTET_STRING_specifics_t asn_SPC_ANY_specs = {
@@ -25,7 +24,6 @@ asn_TYPE_operation_t asn_OP_ANY = {
 	OCTET_STRING_compare,
 	OCTET_STRING_decode_ber,
 	OCTET_STRING_encode_der,
-	OCTET_STRING_encode_json,
 	ANY_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -171,10 +169,4 @@ static int ANY__consume_bytes(const void *buffer, size_t size, void *key) {
 	assert(arg->offset < arg->size);
 
 	return 0;
-}
-
-json_t *
-ANY_to_json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
-{
-	return ber2json(td, ber->buf, ber->size);
 }

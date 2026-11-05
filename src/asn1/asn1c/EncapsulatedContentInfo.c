@@ -9,53 +9,7 @@
 
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/asn1c/RouteOriginAttestation.h"
-#include "json_util.h"
 #include "nid.h"
-
-static json_t *
-EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
-    const void *sptr)
-{
-	struct EncapsulatedContentInfo const *eci = sptr;
-	json_t *parent;
-	json_t *child;
-	int nid;
-
-	if (!eci)
-		return json_null();
-
-	parent = json_obj_new();
-	if (parent == NULL)
-		return NULL;
-
-	td = &asn_DEF_ContentType;
-	child = td->op->json_encoder(td, &eci->eContentType);
-	if (json_object_add(parent, "eContentType", child))
-		goto fail;
-
-	nid = OBJECT_IDENTIFIER_to_nid(&eci->eContentType);
-	if (nid == nid_ct_mft()) {
-		td = &asn_DEF_Manifest;
-		child = OCTET_STRING_to_json(td, eci->eContent);
-	} else if (nid == nid_ct_roa()) {
-		td = &asn_DEF_RouteOriginAttestation;
-		child = OCTET_STRING_to_json(td, eci->eContent);
-	} else if (nid == nid_ct_gbr()) {
-		td = &asn_DEF_OCTET_STRING;
-		child = OCTET_STRING_encode_json_utf8(td, eci->eContent);
-	} else {
-		td = &asn_DEF_OCTET_STRING;
-		child = td->op->json_encoder(td, eci->eContent);
-	}
-
-	if (json_object_add(parent, "eContent", child))
-		goto fail;
-
-	return parent;
-
-fail:	json_decref(parent);
-	return NULL;
-}
 
 static asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
 	SEQUENCE_free,
@@ -63,7 +17,6 @@ static asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
 	SEQUENCE_compare,
 	SEQUENCE_decode_ber,
 	SEQUENCE_encode_der,
-	EncapsulatedContentInfo_encode_json,
 	SEQUENCE_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };

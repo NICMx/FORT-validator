@@ -10,42 +10,6 @@
 #include <openssl/obj_mac.h>
 
 #include "asn1/asn1c/SignedData.h"
-#include "json_util.h"
-
-static json_t *
-ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
-{
-	struct ContentInfo const *ci = sptr;
-	json_t *parent;
-	json_t *child;
-
-	if (!ci)
-		return json_null();
-
-	parent = json_obj_new();
-	if (parent == NULL)
-		return NULL;
-
-	td = &asn_DEF_ContentType;
-	child = td->op->json_encoder(td, &ci->contentType);
-	if (json_object_add(parent, "contentType", child))
-		goto fail;
-
-	if (OBJECT_IDENTIFIER_to_nid(&ci->contentType) == NID_pkcs7_signed) {
-		td = &asn_DEF_SignedData;
-		child = ANY_to_json(td, &ci->content);
-	} else {
-		td = &asn_DEF_ANY;
-		child = td->op->json_encoder(td, &ci->content);
-	}
-	if (json_object_add(parent, "content", child))
-		goto fail;
-
-	return parent;
-
-fail:	json_decref(parent);
-	return NULL;
-}
 
 static asn_TYPE_operation_t asn_OP_ContentInfo = {
 	SEQUENCE_free,
@@ -53,7 +17,6 @@ static asn_TYPE_operation_t asn_OP_ContentInfo = {
 	SEQUENCE_compare,
 	SEQUENCE_decode_ber,
 	SEQUENCE_encode_der,
-	ContentInfo_encode_json,
 	SEQUENCE_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };

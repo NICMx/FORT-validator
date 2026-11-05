@@ -7,10 +7,11 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
+#include "alloc.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "common.h"
-#include "json_util.h"
 #include "log.h"
 
 /*
@@ -25,7 +26,6 @@ asn_TYPE_operation_t asn_OP_INTEGER = {
 	INTEGER_compare,
 	ber_decode_primitive,
 	INTEGER_encode_der,
-	INTEGER_encode_json,
 	INTEGER_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -220,29 +220,6 @@ INTEGER_map_value2enum(const asn_INTEGER_specifics_t *specs, long value) {
 	return (asn_INTEGER_enum_map_t *)bsearch(&value, specs->value2enum,
 		count, sizeof(specs->value2enum[0]),
 		INTEGER__compar_value2enum);
-}
-
-json_t *
-INTEGER_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
-{
-	const INTEGER_t *st;
-	const asn_INTEGER_specifics_t *specs;
-	uintmax_t uint;
-	intmax_t sint;
-
-	st = (const INTEGER_t *)sptr;
-	specs = (const asn_INTEGER_specifics_t *)td->specifics;
-
-	if (specs && specs->field_unsigned) {
-		if (asn_INTEGER2umax(st, &uint) < 0)
-			return NULL;
-		return json_int_new(uint);
-
-	} else {
-		if (asn_INTEGER2imax(st, &sint) < 0)
-			return NULL;
-		return json_int_new(sint);
-	}
 }
 
 asn_enc_rval_t

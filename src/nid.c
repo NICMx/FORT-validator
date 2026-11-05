@@ -6,9 +6,6 @@
 
 #include "log.h"
 
-static int ct_roa_nid;
-static int ct_mft_nid;
-static int ct_gbr_nid;
 static int rpki_manifest_nid;
 static int signed_object_nid;
 static int rpki_notify_nid;
@@ -49,24 +46,6 @@ register_oid(const char *oid, const char *sn, const char *ln)
 int
 nid_init(void)
 {
-	ct_roa_nid = register_oid("1.2.840.113549.1.9.16.1.24",
-	    "id-ct-routeOriginAuthz",
-	    "RPKI ROA (Content type)");
-	if (ct_roa_nid == NID_undef)
-		return EINVAL;
-
-	ct_mft_nid = register_oid("1.2.840.113549.1.9.16.1.26",
-	    "id-ct-rpkiManifest",
-	    "RPKI Manifest (Content type)");
-	if (ct_mft_nid == NID_undef)
-		return EINVAL;
-
-	ct_gbr_nid = register_oid("1.2.840.113549.1.9.16.1.35",
-	    "id-ct-rpkiGhostbusters",
-	    "RPKI Ghostbusters (Content type)");
-	if (ct_gbr_nid == NID_undef)
-		return EINVAL;
-
 	rpki_manifest_nid = register_oid("1.3.6.1.5.5.7.48.10",
 	    "rpkiManifest",
 	    "RPKI Manifest (RFC 6487)");
@@ -122,24 +101,6 @@ void
 nid_destroy(void)
 {
 	OBJ_cleanup();
-}
-
-int
-nid_ct_roa(void)
-{
-	return ct_roa_nid;
-}
-
-int
-nid_ct_mft(void)
-{
-	return ct_mft_nid;
-}
-
-int
-nid_ct_gbr(void)
-{
-	return ct_gbr_nid;
 }
 
 int

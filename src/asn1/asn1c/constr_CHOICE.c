@@ -524,33 +524,6 @@ CHOICE_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 	}
 }
 
-json_t *
-CHOICE_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
-{
-	const asn_CHOICE_specifics_t *specs = (const asn_CHOICE_specifics_t *)td->specifics;
-	unsigned present;
-	asn_TYPE_member_t *elm;
-	const void *memb_ptr;
-
-	if (!sptr)
-		return json_null();
-
-	/* Figure out which CHOICE element is encoded. */
-	present = _fetch_present_idx(sptr, specs->pres_offset, specs->pres_size);
-
-	if (present <= 0 || td->elements_count < present)
-		return json_null();
-
-	/* Print that element. */
-	elm = &td->elements[present-1];
-
-	memb_ptr = get_member(sptr, elm);
-	if (memb_ptr == NULL)
-		return json_null();
-
-	return elm->type->op->json_encoder(elm->type, memb_ptr);
-}
-
 asn_enc_rval_t
 CHOICE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
                   int flags, asn_app_consume_bytes_f *cb,
@@ -846,7 +819,6 @@ asn_TYPE_operation_t asn_OP_CHOICE = {
 	CHOICE_compare,
 	CHOICE_decode_ber,
 	CHOICE_encode_der,
-	CHOICE_encode_json,
 	CHOICE_encode_xer,
 	CHOICE_outmost_tag
 };

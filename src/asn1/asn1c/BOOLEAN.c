@@ -22,7 +22,6 @@ asn_TYPE_operation_t asn_OP_BOOLEAN = {
 	BOOLEAN_compare,
 	BOOLEAN_decode_ber,
 	BOOLEAN_encode_der,
-	BOOLEAN_encode_json,
 	BOOLEAN_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -134,13 +133,6 @@ BOOLEAN_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 	erval.encoded += 1;
 
 	ASN__ENCODED_OK(erval);
-}
-
-json_t *
-BOOLEAN_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
-{
-	const BOOLEAN_t *st = (const BOOLEAN_t *)sptr;
-	return (st != NULL) ? json_boolean(*st) : json_null();
 }
 
 asn_enc_rval_t

@@ -7,13 +7,14 @@
 #include "asn1/asn1c/constr_SET_OF.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/constraints.h"
 #include "asn1/asn1c/der_encoder.h"
 #include "asn1/asn1c/xer_encoder.h"
-#include "json_util.h"
 
 /*
  * Number of bytes left for this structure.
@@ -494,37 +495,6 @@ SET_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
     }
 }
 
-json_t *
-SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
-{
-	json_t *parent;
-	json_t *child;
-	const asn_anonymous_set_ *list;
-	asn_TYPE_descriptor_t *type;
-	int i;
-
-	if (!sptr)
-		return json_null();
-
-	parent = json_array_new();
-	if (parent == NULL)
-		return NULL;
-
-	list = _A_CSET_FROM_VOID(sptr);
-	type = td->elements->type;
-
-	for (i = 0; i < list->count; i++) {
-		child = type->op->json_encoder(type, list->array[i]);
-		if (json_array_add(parent, child))
-			goto fail;
-	}
-
-	return parent;
-
-fail:	json_decref(parent);
-	return NULL;
-}
-
 typedef struct xer_tmp_enc_s {
 	void *buffer;
 	size_t offset;
@@ -857,7 +827,6 @@ asn_TYPE_operation_t asn_OP_SET_OF = {
 	SET_OF_compare,
 	SET_OF_decode_ber,
 	SET_OF_encode_der,
-	SET_OF_encode_json,
 	SET_OF_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };

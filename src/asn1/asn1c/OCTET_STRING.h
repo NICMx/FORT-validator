@@ -31,8 +31,6 @@ asn_struct_print_f OCTET_STRING_print_utf8;
 asn_struct_compare_f OCTET_STRING_compare;
 ber_type_decoder_f OCTET_STRING_decode_ber;
 der_type_encoder_f OCTET_STRING_encode_der;
-json_type_encoder_f OCTET_STRING_encode_json;
-json_type_encoder_f OCTET_STRING_encode_json_utf8;
 xer_type_encoder_f OCTET_STRING_encode_xer;
 xer_type_encoder_f OCTET_STRING_encode_xer_utf8;
 
@@ -66,8 +64,6 @@ OCTET_STRING_t *OCTET_STRING_new_fromBuf(const asn_TYPE_descriptor_t *td,
                                          const char *str, int size);
 
 char *OCTET_STRING_toString(OCTET_STRING_t *);
-json_t *OCTET_STRING_to_json(const asn_TYPE_descriptor_t *,
-			     OCTET_STRING_t const *);
 
 /****************************
  * Internally useful stuff. *

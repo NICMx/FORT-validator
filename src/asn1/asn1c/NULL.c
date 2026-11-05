@@ -22,7 +22,6 @@ asn_TYPE_operation_t asn_OP_NULL = {
 	NULL_compare,
 	NULL_decode_ber,
 	NULL_encode_der,	/* Special handling of DER encoding */
-	NULL_encode_json,
 	NULL_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -110,12 +109,6 @@ NULL_encode_der(const asn_TYPE_descriptor_t *td, const void *ptr, int tag_mode,
 	}
 
 	ASN__ENCODED_OK(erval);
-}
-
-json_t *
-NULL_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
-{
-	return json_null();
 }
 
 asn_enc_rval_t

@@ -28,7 +28,6 @@ asn_TYPE_operation_t asn_OP_BIT_STRING = {
 	BIT_STRING_compare,
 	OCTET_STRING_decode_ber,   /* Implemented in terms of OCTET STRING */
 	OCTET_STRING_encode_der,   /* Implemented in terms of OCTET STRING */
-	OCTET_STRING_encode_json,  /* Implemented in terms of OCTET STRING */
 	BIT_STRING_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };

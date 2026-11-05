@@ -7,11 +7,11 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
 #include "asn1/asn1c/GeneralizedTime.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/xer_encoder.h"
-#include "json_util.h"
 
 #ifndef	ASN___INTERNAL_TEST_MODE
 
@@ -29,7 +29,6 @@ asn_TYPE_operation_t asn_OP_UTCTime = {
 	UTCTime_compare,
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	OCTET_STRING_encode_der,    /* Implemented in terms of OCTET STRING */
-	UTCTime_encode_json,
 	UTCTime_encode_xer,
 	NULL	/* Use generic outmost tag fetcher */
 };
@@ -128,21 +127,6 @@ UTCTime_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		return (cb("<bad-value>", 11, app_key) < 0) ? -1 : 0;
 
 	return (cb(buf, ret, app_key) < 0) ? -1 : 0;
-}
-
-json_t *
-UTCTime_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
-{
-	const UTCTime_t *st = (const UTCTime_t *)sptr;
-	char buf[ASN_TM_STR_MAXLEN];
-
-	if (st == NULL || st->buf == NULL)
-		return json_null();
-
-	if (UTCTime2str(st, buf) < 0)
-		return NULL;
-
-	return json_str_new(buf);
 }
 
 time_t
