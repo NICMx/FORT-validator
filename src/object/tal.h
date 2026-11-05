@@ -20,7 +20,7 @@ struct tal {
 	atomic_uint refcount;
 };
 
-validation_verdict traverse_tal(struct validation_thread *, char const *);
+validation_verdict tal_traverse(struct validation_thread *, char const *);
 
 void tal_cleanup(struct tal *);
 

@@ -185,7 +185,7 @@ try_urls(struct validation_thread *vt, struct tal *tal, char const *proto,
 }
 
 validation_verdict
-traverse_tal(struct validation_thread *vt, char const *path)
+tal_traverse(struct validation_thread *vt, char const *path)
 {
 	struct tal *tal;
 	validation_verdict vv;

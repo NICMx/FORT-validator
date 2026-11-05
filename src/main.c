@@ -34,7 +34,7 @@ queue_tal(char const *tal_path, void *arg)
 }
 
 static void *
-pick_up_work(void *arg)
+claim_work(void *arg)
 {
 	struct validation_task *task = NULL;
 	struct validation_thread *vt = arg;
@@ -52,7 +52,7 @@ pick_up_work(void *arg)
 			}
 			break;
 		case VTT_TAL:
-			vv = traverse_tal(vt, task->u.tal);
+			vv = tal_traverse(vt, task->u.tal);
 			if (vv == VV_BUSY) {
 				task_requeue_dormant(task);
 				task = NULL;
@@ -70,122 +70,108 @@ pick_up_work(void *arg)
 	return NULL;
 }
 
-struct vp_table *
-perform_standalone_validation(void)
+static int
+clean_and_export_vpt(struct vp_table *vpt)
 {
-	struct validation_thread *vts; /* array */
+	int error;
+
+	error = slurm_apply(vpt);
+	if (error)
+		return error;
+	vpt_sort(vpt);
+
+	error = vpt_cache(vpt);
+	if (error)
+		return error;
+	output_print_data(vpt);
+
+	return 0;
+}
+
+static struct vp_table *
+__validation_cycle(void)
+{
+	struct validation_thread *threads; /* array */
 	unsigned int t;
-	struct vp_table *result;
+	struct vp_table *vpt;
 	int error;
 
 	if (cache_prepare() != 0)
 		return NULL;
 
-	result = NULL;
 	task_start();
 
 	if (foreach_file(fortcfg.tal, ".tal", true, queue_tal, NULL) != 0)
-		goto end;
+		goto cancel;
 
 	if (report_enable() != 0)
-		goto end;
+		goto cancel;
 
-	vts = vthreads_create();
+	threads = vthreads_create();
 
 	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
-		error = pthread_create(&vts[t].id, NULL, pick_up_work, &vts[t]);
+		error = pthread_create(&threads[t].id, NULL, claim_work,
+		    &threads[t]);
 		if (error)
 			pr_panic("pthread_create(%u) failed: %s",
 			    t, strerror(error));
 	}
 
 	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
-		error = pthread_join(vts[t].id, NULL);
+		error = pthread_join(threads[t].id, NULL);
 		if (error)
 			pr_panic("pthread_join(%u) failed: %s",
 			    t, strerror(error));
 	}
 
-	if (!task_stopped()) {
-		result = vthreads_commit(vts); /* Can return NULL! */
+	vpt = task_stopped() ? NULL : vthreads_commit(threads);
 
 //		// FIXME
 //		stats_set_tal_vrps(thread->tal_file, "ipv4",
 //		    vpt_vrp4_count(thread->db));
 //		stats_set_tal_vrps(thread->tal_file, "ipv6",
 //		    vpt_vrp6_count(thread->db));
-	}
 
-	vthreads_destroy(vts);
+	vthreads_destroy(threads);
 	report_disable();
 	fnstack_cleanup(); // XXX there's no init?
+	task_stop();
+
+	if (vpt && clean_and_export_vpt(vpt) != 0) {
+		vpt_destroy(vpt);
+		vpt = NULL;
+	}
+
 	cache_commit();
-end:	task_stop();
-	return result;
-}
-
-/*
- * High level validator function.
- *
- * - Downloads tree
- * - Validates tree
- * - Updates RTR state
- */
-static struct vp_table *
-__vrps_update(void)
-{
-	struct vp_table *vpt;
-
-	vpt = perform_standalone_validation();
-	if (!vpt)
-		return NULL;
-
-	// XXX The RTR save should happen before the cache cleanup
-
-	if (slurm_apply(vpt) != 0)
-		goto fail;
-
-	vpt_sort(vpt);
-
-	if (vpt_cache(vpt) != 0)
-		goto fail;
-
-	output_print_data(vpt);
 
 	return vpt;
 
-fail:	vpt_destroy(vpt);
+cancel:
+	task_stop();
 	return NULL;
 }
 
-/*
- * Highest level validator function.
- *
- * - Downloads tree
- * - Validates tree
- * - Updates RTR state
- * - Logs status
- *
- * TODO (#50) remove this wrapper once Prometheus is implemented
- */
-int
-vrps_update(struct rtr_metadata *rtr)
+static double
+get_runtime(time_t start, time_t finish)
+{
+	return (start != ((time_t) -1) && finish != ((time_t) -1))
+	    ? difftime(finish, start)
+	    : -1;
+}
+
+static int
+validation_cycle(struct rtr_metadata *rtr)
 {
 	struct vp_table *vpt;
 	time_t start, finish;
 
 	start = time(NULL);
-	vpt = __vrps_update();
+	vpt = __validation_cycle();
 	finish = time(NULL);
 
-	pr_inf("Validation finished:");
-	pr_inf("- Valid VRPs: %u", vpt_vrp_count(vpt));
-	pr_inf("- Valid Router Keys: %u", vpt_rk_count(vpt));
-	pr_inf("- Valid ASPAs: %u", vpt_aspa_count(vpt));
-	if (fortcfg.mode == SERVER)
-		pr_inf("- Serial: %u", vpt_serial(vpt));
-	if (start != ((time_t) -1) && finish != ((time_t) -1))
-		pr_inf("- Real execution time: %.0lfs", difftime(finish, start));
+	pr_inf("Validation cycle ended. VRPs %u RKs %u ASPAs %u Runtime %.0lf",
+	    vpt_vrp_count(vpt), vpt_rk_count(vpt), vpt_aspa_count(vpt),
+	    get_runtime(start, finish));
 
 	if (rtr) {
 		rtr->session = vpt_session(vpt);
@@ -203,7 +189,7 @@ fort_standalone(void)
 
 	pr_inf("Updating cache...");
 
-	error = vrps_update(NULL);
+	error = validation_cycle(NULL);
 	if (error) {
 		pr_err("Validation unsuccessful; results unusable.");
 		return error;
@@ -225,7 +211,7 @@ fort_server(void)
 	if (error)
 		return error;
 
-	error = vrps_update(&rtr);
+	error = validation_cycle(&rtr);
 	if (error) {
 		pr_err("Main loop: Validation unsuccessful; results unusable.");
 		goto end;
@@ -242,7 +228,7 @@ fort_server(void)
 			break;
 		pr_inf("Main loop: Time to work!");
 
-		error = vrps_update(&rtr);
+		error = validation_cycle(&rtr);
 		if (fort_end || error == EINTR)
 			break;
 		if (error) {
@@ -256,8 +242,41 @@ end:	rtr_stop();
 	return error;
 }
 
+/*
+ * Shells don't like it when we return values other than 0-255.
+ * In fact, bash also has its own meanings for 126-255.
+ * (See man 1 bash > EXIT STATUS)
+ *
+ * This function shifts @error to our exclusive range.
+ */
 static int
-fort_cycle(int argc, char **argv)
+convert_to_result(int error)
+{
+	if (error == 0)
+		return 0; /* Happy path */
+
+	/* -INT_MIN overflows, So handle weird case. */
+	if (error == INT_MIN)
+		return 125;
+
+	/* Force range 0-127 */
+	if (error < 0)
+		error = -error;
+	error &= 0x7F;
+
+	switch (error) {
+	case 126:
+		return 122;
+	case 127:
+		return 123;
+	case 0:
+		return 124; /* was divisible by 128; force error. */
+	}
+	return error;
+}
+
+int
+main(int argc, char **argv)
 {
 	init_verdict verdict;
 	int error;
@@ -266,11 +285,17 @@ fort_cycle(int argc, char **argv)
 	/* DO NOT INSTALL SIGNAL HANDLERS UNTIL WE'RE DONE DAEMONIZING. */
 	/* Also: Daemonizing will close all file descriptors. */
 
+	log_setup();
+
 	verdict = handle_flags_config(argc, argv);
-	if (verdict == IV_FAIL)
-		return EINVAL;
-	if (verdict == IV_DONE)
-		return 0;
+	if (verdict == IV_FAIL) {
+		error = EINVAL;
+		goto revert_log;
+	}
+	if (verdict == IV_DONE) {
+		error = 0;
+		goto revert_log;
+	}
 
 	if (fortcfg.daemon) {
 		verdict = daemonize(); /* fork */
@@ -399,51 +424,7 @@ revert_daemon:
 	daemon_teardown();
 revert_config:
 	free_rpki_config();
-	return error;
-}
-
-/*
- * Shells don't like it when we return values other than 0-255.
- * In fact, bash also has its own meanings for 126-255.
- * (See man 1 bash > EXIT STATUS)
- *
- * This function shifts @error to our exclusive range.
- */
-static int
-convert_to_result(int error)
-{
-	if (error == 0)
-		return 0; /* Happy path */
-
-	/* -INT_MIN overflows, So handle weird case. */
-	if (error == INT_MIN)
-		return 125;
-
-	/* Force range 0-127 */
-	if (error < 0)
-		error = -error;
-	error &= 0x7F;
-
-	switch (error) {
-	case 126:
-		return 122;
-	case 127:
-		return 123;
-	case 0:
-		return 124; /* was divisible by 128; force error. */
-	}
-	return error;
-}
-
-int
-main(int argc, char **argv)
-{
-	int error;
-
-	log_setup();
-
-	error = fort_cycle(argc, argv);
-
+revert_log:
 	log_teardown();
 	return convert_to_result(error);
 }
