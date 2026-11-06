@@ -8,7 +8,7 @@
 #include "config.h"
 #include "http.h"
 #include "log.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 
 /*
  * Implementation notes:

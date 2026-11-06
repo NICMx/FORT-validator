@@ -11,6 +11,7 @@
 #include "config/mode.h"
 #include "config/output_format.h"
 #include "config/string_array.h"
+#include "config/ts.h"
 
 /*
  * To add a member to this structure,
@@ -110,19 +111,15 @@ struct fort_config {
 	} rrdp;
 
 	struct {
-		/* Enables operation logs **/
-		bool enabled;
-		bool print_times;
-		/* String tag to identify operation logs **/
-		char *tag;
-		/* Print ANSI color codes? */
-		bool color;
-		/* Log level */
-		uint8_t level;
-		/* Log output */
-		enum log_output output;
-		/* facility for syslog if output is syslog **/
-		uint32_t facility;
+		struct {
+			struct log_level level;
+		} syslog;
+		struct {
+			struct log_level level;
+			enum ts_type timestamps;
+			/* Print ANSI color codes? */
+			bool color;
+		} console;
 	} log;
 
 	struct {
@@ -173,9 +170,6 @@ init_verdict handle_flags_config(int , char **);
 void free_rpki_config(void);
 
 #define MAX_ASPA_PROVIDERS 16380u /* Absolute maximum */
-
-void set_logger_syslog(void);
-void set_logger_console(void);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

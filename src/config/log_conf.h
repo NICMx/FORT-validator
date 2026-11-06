@@ -3,13 +3,17 @@
 
 #include "config/types.h"
 
-enum log_output {
-	SYSLOG,
-	CONSOLE
+enum log_level_state {
+	LLS_UNSET,
+	LLS_DISABLED,
+	LLS_ENABLED,
+};
+
+struct log_level {
+	enum log_level_state state;
+	int val; /* Only if state == LLS_ENABLED */
 };
 
 extern const struct global_type gt_log_level;
-extern const struct global_type gt_log_output;
-extern const struct global_type gt_log_facility;
 
 #endif /* SRC_CONFIG_LOG_CONF_H_ */

@@ -23,6 +23,7 @@ fort_SOURCES += config/output_format.h config/output_format.c
 fort_SOURCES += config/str.c config/str.h
 fort_SOURCES += config/string_array.h config/string_array.c
 fort_SOURCES += config/time.h config/time.c
+fort_SOURCES += config/ts.h config/ts.c
 fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
 fort_SOURCES += daemon.h daemon.c

@@ -33,21 +33,8 @@
 #define CHECK_FORMAT(str, args) /* Nothing */
 #endif
 
-struct log_listener {
-	char const *type;
-	char const *level;
-	char const *filename;	/* file only */
-	bool print_times;	/* console and file only */
-	bool color;		/* console and file only */
-	int facility;		/* syslog only */
-
-	TAILQ_ENTRY(log_listener) lh;
-};
-
-TAILQ_HEAD(log_listeners, log_listener);
-
 void log_setup(void);			/* Enables pr_* functions */
-int log_init(struct log_listeners *);	/* Loads configuration */
+int log_init(void);			/* Loads configuration */
 void log_silence_std(void);
 void log_teardown(void);
 

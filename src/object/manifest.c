@@ -12,7 +12,7 @@
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/signed_object.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 
 enum file_type {
 	FT_UNK,

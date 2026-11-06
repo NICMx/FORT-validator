@@ -5,7 +5,7 @@
 #include "log.h"
 #include "object/certificate.h"
 #include "object/signed_object.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 
 static int
 decode_roa(struct signed_object *so, struct RouteOriginAttestation **result)

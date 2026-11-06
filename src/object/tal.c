@@ -8,7 +8,7 @@
 #include "log.h"
 #include "object/certificate.h"
 #include "task.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 #include "types/path.h"
 
 static char *

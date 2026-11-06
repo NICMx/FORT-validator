@@ -13,6 +13,7 @@
 #include "config/incidences.h"
 #include "config/str.h"
 #include "config/time.h"
+#include "config/ts.h"
 #include "config/uint.h"
 #include "configure_ac.h"
 #include "file.h"
@@ -339,50 +340,31 @@ static const struct option_field options[] = {
 	/* Logging fields */
 	{
 		.id = 4000,
-		.name = "log.enabled",
-		.type = &gt_bool,
-		.offset = offsetof(struct fort_config, log.enabled),
-		.doc = "Enables operation logs",
-	}, {
-		.id = 4001,
-		.name = "log.output",
-		.type = &gt_log_output,
-		.offset = offsetof(struct fort_config, log.output),
-		.doc = "Output where operation log messages will be printed",
-	}, {
-		.id = 4002,
-		.name = "log.level",
+		.name = "log.syslog.level",
 		.type = &gt_log_level,
-		.offset = offsetof(struct fort_config, log.level),
-		.doc = "Log level to print message of equal or higher importance",
+		.offset = offsetof(struct fort_config, log.syslog.level),
+		.doc = "Minimum log level to send to syslog",
 	}, {
-		.id = 4006,
-		.name = "log.print-times",
+		.id = 4101,
+		.name = "log.console.level",
+		.type = &gt_log_level,
+		.offset = offsetof(struct fort_config, log.console.level),
+		.doc = "Minimum log level to send to the standard streams",
+	}, {
+		.id = 4102,
+		.name = "log.console.timestamps",
+		.type = &gt_timestamp_type,
+		.offset = offsetof(struct fort_config, log.console.timestamps),
+		.doc = "Prefix console logs with date and time?",
+	}, {
+		.id = 4103,
+		.name = "log.console.color",
 		.type = &gt_bool,
-		.offset = offsetof(struct fort_config, log.print_times),
-		.doc = "(Console output only)",
-	}, {
-		.id = 4003,
-		.name = "log.tag",
-		.type = &gt_string,
-		.offset = offsetof(struct fort_config, log.tag),
-		.doc = "Text tag to identify operation logs",
-		.arg_doc = "<string>",
-		.json_null_allowed = true,
-	}, {
-		.id = 4004,
-		.name = "log.facility",
-		.type = &gt_log_facility,
-		.offset = offsetof(struct fort_config, log.facility),
-		.doc = "Facility for syslog if output is syslog",
-	}, {
-		.id = 'c',
-		.name = "log.color-output",
-		.type = &gt_bool,
-		.offset = offsetof(struct fort_config, log.color),
-		.doc = "Print ANSI color codes",
+		.offset = offsetof(struct fort_config, log.console.color),
+		.doc = "Include ANSI color codes in console logs?",
 	},
 
+	/* Report */
 	{
 		.id = 4010,
 		.name = "report.path",
@@ -652,12 +634,10 @@ set_default_values(void)
 	/* TODO (fine) 64 may be too little; optimize. */
 	fortcfg.rrdp.delta_threshold = 64;
 
-	fortcfg.log.enabled = true;
-	fortcfg.log.tag = NULL;
-	fortcfg.log.color = false;
-	fortcfg.log.level = LOG_WARNING;
-	fortcfg.log.output = CONSOLE;
-	fortcfg.log.facility = LOG_DAEMON;
+	fortcfg.log.syslog.level.state = LLS_UNSET;
+	fortcfg.log.console.level.state = LLS_UNSET;
+	fortcfg.log.console.timestamps = TST_OFF;
+	fortcfg.log.console.color = false;
 
 	fortcfg.report.path = NULL;
 
@@ -832,40 +812,24 @@ become_absolute_paths(void)
 	return 0;
 }
 
-void
-set_logger_syslog(void)
-{
-	struct log_listeners list = TAILQ_HEAD_INITIALIZER(list);
-	struct log_listener node = { 0 };
-
-	node.type = "syslog";
-	node.level = "info";
-	node.facility = LOG_DAEMON;
-
-	TAILQ_INSERT_TAIL(&list, &node, lh);
-	log_init(&list);
-}
-
-void
-set_logger_console(void)
-{
-	struct log_listeners list = TAILQ_HEAD_INITIALIZER(list);
-	struct log_listener node = { 0 };
-
-	node.type = "console";
-	node.level = "trace";
-	node.color = true;
-
-	TAILQ_INSERT_TAIL(&list, &node, lh);
-	log_init(&list);
-}
-
 init_verdict
 handle_flags_config(int argc, char **argv)
 {
 	if (parse_cfg(argc, argv) != 0) {
 		pr_err("Try '%s --help' for more information.", argv[0]);
 		return IV_FAIL;
+	}
+
+	if (fortcfg.daemon) {
+		if (fortcfg.log.syslog.level.state == LLS_UNSET) {
+			fortcfg.log.syslog.level.state = LLS_ENABLED;
+			fortcfg.log.syslog.level.val = LOG_INFO;
+		}
+	} else {
+		if (fortcfg.log.console.level.state == LLS_UNSET) {
+			fortcfg.log.console.level.state = LLS_ENABLED;
+			fortcfg.log.console.level.val = LOG_INFO;
+		}
 	}
 
 	if (become_absolute_paths() != 0) {

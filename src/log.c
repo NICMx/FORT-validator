@@ -15,9 +15,19 @@
 
 #include "config.h"
 #include "report.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 #include "types/list.h"
 #include "types/path.h"
+
+struct log_listener {
+	char const *type;
+	uint8_t level;
+	char const *filename;	/* file only */
+	bool print_times;	/* console and file only */
+	bool color;		/* console and file only */
+
+	TAILQ_ENTRY(log_listener) lh;
+};
 
 struct level {
 	int id;
@@ -25,31 +35,31 @@ struct level {
 	char const *name;
 	char const *color;
 	char const *rst;
+	bool print_filenames;
 };
 
 #ifdef PR_CLUTTER_ENABLED
-static struct level CLT = { LOG_DEBUG, "CLT", "clutter", CLR_CLT, CLR_RST };
+static struct level CLT = { LOG_DEBUG, "CLT", "clutter", CLR_CLT, CLR_RST, false };
 #endif
-static struct level TRC = { LOG_DEBUG, "TRC", "trace", CLR_TRC, CLR_RST };
-static struct level INF = { LOG_INFO, "INF", "info", "", "" };
-static struct level WRN = { LOG_WARNING, "WRN", "warning", CLR_WRN, CLR_RST };
-static struct level ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST };
-static struct level CRT = { LOG_CRIT, "CRT", "critical", CLR_CRT, CLR_RST };
-static struct level PNC = { LOG_EMERG, "PNC", "panic", CLR_PNC, CLR_RST };
+static struct level TRC = { LOG_DEBUG, "TRC", "trace", CLR_TRC, CLR_RST, false };
+static struct level INF = { LOG_INFO, "INF", "info", "", "", false };
+static struct level WRN = { LOG_WARNING, "WRN", "warning", CLR_WRN, CLR_RST, false };
+static struct level ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST, false };
+static struct level CRT = { LOG_CRIT, "CRT", "critical", CLR_CRT, CLR_RST, false };
+static struct level PNC = { LOG_EMERG, "PNC", "panic", CLR_PNC, CLR_RST, false };
 
 /* Validation warning (reported, so logged on trace level, except yellow) */
-static struct level TRC_WRN = { LOG_DEBUG, "TRW", NULL, CLR_WRN, CLR_RST };
+static struct level TRC_WRN = { LOG_DEBUG, "TRW", NULL, CLR_WRN, CLR_RST, true };
 /* Validation error (reported, so logged on trace level, except red) */
-static struct level TRC_ERR = { LOG_DEBUG, "TRE", NULL, CLR_ERR, CLR_RST };
+static struct level TRC_ERR = { LOG_DEBUG, "TRE", NULL, CLR_ERR, CLR_RST, true };
 
 struct logger {
 	void (*cb)(struct logger *, struct level *, char const *, va_list);
 
 	struct level *lvl;
 	FILE *stream;		/* file only */
-	bool print_times;	/* console and file only */
+	enum ts_type tst;	/* console and file only */
 	bool color;		/* console and file only */
-	int facility;		/* syslog only */
 	bool free;
 
 	pthread_mutex_t *lock;	/* console (except init) and file only */
@@ -113,34 +123,63 @@ init_mutex(struct logger *lgr)
 }
 
 static void
-get_time(char *buf /* Must length 16 */)
+print_timestamp(FILE *out, enum ts_type tst)
 {
+	char buf[21];
 	time_t now;
-	struct tm components;
+	struct tm parts;
 
-	now = time(NULL);
-	if (now == ((time_t) -1))
+	switch (tst) {
+	case TST_OFF:
 		return;
-	if (localtime_r(&now, &components) == NULL)
-		return;
-	if (strftime(buf, sizeof(buf), "%m-%d %H:%M:%S ", &components) == 0)
-		buf[0] = 0;
+
+	case TST_UTC:
+		now = time(NULL);
+		if (now == ((time_t) -1))
+			return;
+		if (gmtime_r(&now, &parts) == NULL)
+			return;
+		if (!strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &parts))
+			return;
+		break;
+
+	case TST_LOCAL:
+		now = time(NULL);
+		if (now == ((time_t) -1))
+			return;
+		if (localtime_r(&now, &parts) == NULL)
+			return;
+		if (!strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &parts))
+			return;
+		break;
+	}
+
+	fprintf(out, "%s ", buf);
+}
+
+static void
+print_filename(FILE *out)
+{
+	char const *filename;
+
+	filename = fnstack_peek();
+	if (filename)
+		fprintf(out, "%s: ", filename);
 }
 
 static void
 stream_print(FILE *out, struct logger *lgr, struct level *lvl,
     char const *fmt, va_list vl)
 {
-	char time[16];
-
-	time[0] = 0;
-	if (lgr->print_times)
-		get_time(time);
-
 	if (lgr->lock)
 		pthread_mutex_lock(lgr->lock);
 
-	fprintf(out, "%s%s%s: ", lgr->color ? lvl->color : "", time, lvl->tag);
+	if (lgr->color)
+		fprintf(out, "%s", lvl->color);
+	print_timestamp(out, lgr->tst);
+	fprintf(out, "%s: ", lvl->tag);
+	if (lvl->print_filenames)
+		print_filename(out);
 	vfprintf(out, fmt, vl);
 	fprintf(out, "%s\n", lgr->color ? lvl->rst : "");
 
@@ -158,16 +197,18 @@ console_cb(struct logger *lgr, struct level *lvl, char const *fmt, va_list vl)
 	fflush(stream);
 }
 
+/*
 static void
 file_cb(struct logger *lgr, struct level *lvl, char const *fmt, va_list vl)
 {
 	stream_print(lgr->stream, lgr, lvl, fmt, vl);
 }
+*/
 
 static void
 syslog_cb(struct logger *lgr, struct level *lvl, char const *fmt, va_list vl)
 {
-	vsyslog(lvl->id | lgr->facility, fmt, vl);
+	vsyslog(lvl->id | LOG_DAEMON, fmt, vl);
 }
 
 void
@@ -182,48 +223,18 @@ log_setup(void)
 }
 
 static int
-add_listener(struct loggers *list, struct log_listener *new)
+id2level(int id, struct level **lvl)
 {
-	struct logger *node;
-
-	node = pzalloc(sizeof(struct logger));
-	node->free = true;
-
-	if (strcmp(new->level, ERR.name) == 0)
-		node->lvl = &ERR;
-	else if (strcmp(new->level, WRN.name) == 0)
-		node->lvl = &WRN;
-	else if (strcmp(new->level, INF.name) == 0)
-		node->lvl = &INF;
-	else if (strcmp(new->level, TRC.name) == 0)
-		node->lvl = &TRC;
-	else {
-		free(node);
-		return pr_err("Unknown log level: %s", new->level);
-	}
-
-	if (strcmp(new->type, "console") == 0) {
-		node->cb = console_cb;
-		node->print_times = new->print_times;
-		node->color = new->color;
-		init_mutex(node);
-	} else if (strcmp(new->type, "file") == 0) {
-		node->cb = file_cb;
-		node->stream = fopen(new->filename, "a");
-		node->print_times = new->print_times;
-		node->color = new->color;
-		init_mutex(node);
-	} else if (strcmp(new->type, "syslog") == 0) {
-		node->cb = syslog_cb;
-		node->facility = new->facility;
-	} else {
-		free(node);
-		return pr_err("Unknown log type: %s", new->type);
-	}
-
-	if (node->lvl == &TRC)
-		trc_enabled = true;
-	SLIST_INSERT_HEAD(list, node, lh);
+	if (id == ERR.id)
+		*lvl = &ERR;
+	else if (id == WRN.id)
+		*lvl = &WRN;
+	else if (id == INF.id)
+		*lvl = &INF;
+	else if (id == TRC.id)
+		*lvl = &TRC;
+	else
+		return pr_err("Unknown log level: %u", id);
 	return 0;
 }
 
@@ -252,24 +263,55 @@ clear_loggers(struct loggers *list)
 }
 
 int
-log_init(struct log_listeners *descriptors)
+log_init(void)
 {
+	static struct logger syslogger;
+	static struct logger stdlogger;
 	struct loggers newlist;
-	struct log_listener *descriptor;
 	int error;
 
 	SLIST_INIT(&newlist);
-	TAILQ_FOREACH(descriptor, descriptors, lh) {
-		error = add_listener(&newlist, descriptor);
-		if (error) {
-			clear_loggers(&newlist);
-			return error;
-		}
+
+	if (fortcfg.log.syslog.level.state == LLS_ENABLED) {
+		openlog("fort", 0, LOG_DAEMON);
+
+		syslogger.cb = syslog_cb;
+		error = id2level(fortcfg.log.syslog.level.val, &syslogger.lvl);
+		if (error)
+			goto fail;
+		syslogger.stream = NULL;
+		syslogger.tst = TST_OFF;
+		syslogger.color = false;
+		syslogger.free = false;
+		syslogger.lock = NULL;
+		SLIST_INSERT_HEAD(&newlist, &syslogger, lh);
+
+		if (syslogger.lvl == &TRC)
+			trc_enabled = true;
+	}
+
+	if (fortcfg.log.console.level.state == LLS_ENABLED) {
+ 		stdlogger.cb = console_cb;
+		error = id2level(fortcfg.log.console.level.val, &stdlogger.lvl);
+		if (error)
+			goto fail;
+		stdlogger.stream = NULL;
+		stdlogger.tst = fortcfg.log.console.timestamps;
+		stdlogger.color = fortcfg.log.console.color;
+		stdlogger.free = false;
+		init_mutex(&stdlogger);
+		SLIST_INSERT_HEAD(&newlist, &stdlogger, lh);
+
+		if (stdlogger.lvl == &TRC)
+			trc_enabled = true;
 	}
 
 	clear_loggers(&listeners);
 	listeners = newlist;
 	return 0;
+
+fail:	clear_loggers(&newlist);
+	return error;
 }
 
 /* Removes the standard stream logging handlers */
@@ -289,8 +331,18 @@ log_silence_std(void)
 void
 log_teardown(void)
 {
-	clear_loggers(&listeners);
-//	closelog(); XXX
+	struct logger *lgr;
+	bool has_syslog = false;
+
+	while ((lgr = SLIST_FIRST(&listeners)) != NULL) {
+		if (lgr->cb == syslog_cb)
+			has_syslog = true;
+		SLIST_REMOVE_HEAD(&listeners, lh);
+		free_logger(lgr);
+	}
+
+	if (has_syslog)
+		closelog();
 }
 
 #ifdef PR_CLUTTER_ENABLED

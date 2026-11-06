@@ -34,6 +34,10 @@ done:	enabled = true;
 	return 0;
 }
 
+/*
+ * "enabled" in this context means "we're currently in the middle of a
+ * validation cycle," not "the user enabled reporting."
+ */
 bool
 report_enabled(void)
 {

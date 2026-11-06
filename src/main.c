@@ -19,7 +19,7 @@
 #include "slurm/slurm_loader.h"
 #include "stats.h"
 #include "task.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 
 static int
 queue_tal(char const *tal_path, void *arg)
@@ -39,6 +39,8 @@ claim_work(void *arg)
 	struct validation_task *task = NULL;
 	struct validation_thread *vt = arg;
 	validation_verdict vv;
+
+	fnstack_init();
 
 	while ((task = task_dequeue(task)) != NULL) {
 		pr_trc("Dequeued task: %s", task_name(task));
@@ -134,7 +136,6 @@ __validation_cycle(void)
 
 	vthreads_destroy(threads);
 	report_disable();
-	fnstack_cleanup(); // XXX there's no init?
 	task_stop();
 
 	if (vpt && clean_and_export_vpt(vpt) != 0) {
@@ -307,11 +308,11 @@ main(int argc, char **argv)
 			error = 0;
 			goto revert_config;
 		}
-
-		set_logger_syslog(); /* XXX hardcoded */
-	} else {
-		set_logger_console(); /* XXX hardcoded */
 	}
+
+	error = log_init();
+	if (error)
+		goto revert_daemon;
 
 	/* Needs to happen before drop_privileges() if port < 1024 */
 	if (fortcfg.mode == SERVER) {
@@ -354,9 +355,8 @@ main(int argc, char **argv)
 		goto revert_rsync;
 	register_signal_handlers();
 
-	error = thvar_init();
-	if (error)
-		goto revert_rsync;
+	fnstack_setup();
+
 	error = stats_setup();
 	if (error)
 		goto revert_rsync;

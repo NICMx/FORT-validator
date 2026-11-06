@@ -5,8 +5,8 @@
 #include "config.h"
 #include "log.h"
 #include "object/signed_object.h"
-#include "thread_var.h"
 #include "types/aspa.h"
+#include "types/fnstack.h"
 
 #define ASID_MAX UINT32_MAX
 

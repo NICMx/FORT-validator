@@ -22,7 +22,7 @@
 #include "object/roa.h"
 #include "object/signed_object.h"
 #include "task.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 #include "types/name.h"
 #include "types/str.h"
 

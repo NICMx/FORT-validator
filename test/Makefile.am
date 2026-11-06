@@ -48,6 +48,10 @@ check_PROGRAMS +=		common.test
 common_test_SOURCES =		common_test.c
 common_test_LDADD =		${CHECK_LIBS}
 
+check_PROGRAMS +=		fnstack.test
+fnstack_test_SOURCES =		types/fnstack_test.c
+fnstack_test_LDADD =		${CHECK_LIBS}
+
 check_PROGRAMS +=		vpt.test
 vpt_test_SOURCES =		rtr/db/vpt_test.c
 vpt_test_LDADD =		${CHECK_LIBS}

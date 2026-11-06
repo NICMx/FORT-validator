@@ -12,7 +12,7 @@
 #include "json_util.h"
 #include "log.h"
 #include "rrdp_xml.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 
 struct rrdp_step {
 	struct rrdp_serial serial;

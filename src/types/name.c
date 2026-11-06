@@ -6,7 +6,7 @@
 #include <syslog.h>
 
 #include "log.h"
-#include "thread_var.h"
+#include "types/fnstack.h"
 
 /**
  * It's an RFC5280 name, but from RFC 6487's perspective.

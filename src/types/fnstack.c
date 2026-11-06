@@ -1,29 +1,21 @@
-#include "thread_var.h"
+#include "fnstack.h"
 
 #include <pthread.h>
 
 #include "log.h"
 
+#define FNSTACK_SIZE 8
+
 static pthread_key_t filenames_key;
 
 struct filename_stack {
-	/* This can be NULL. Abort all operations if this is the case. */
-	char const **filenames;
-	unsigned int len;
-	unsigned int size;
+	char const *filenames[FNSTACK_SIZE];
+	int len;
 };
 
-static void
-fnstack_discard(void *arg)
-{
-	struct filename_stack *files = arg;
-	free(files->filenames);
-	free(files);
-}
-
-/** Initializes this entire module. Call once per runtime lifetime. */
-int
-thvar_init(void)
+/* Initializes this entire module. Call once per runtime lifetime. */
+void
+fnstack_setup(void)
 {
 	int error;
 
@@ -33,18 +25,16 @@ thvar_init(void)
 	 * Not sure if this is an implementation quirk.
 	 * We'll just have to delete it manually.
 	 */
-	error = pthread_key_create(&filenames_key, fnstack_discard);
-	if (error) {
+	error = pthread_key_create(&filenames_key, free);
+	if (error)
 		pr_err(
-		    "Cannot initialize the file name stack thread variable: %s",
-		    strerror(error));
-		return error;
-	}
-
-	return 0;
+		    "Cannot initialize file name stack thread variable: %s. "
+		    "File name logging will be disabled.",
+		    strerror(error)
+		);
 }
 
-/** Initializes the current thread's fnstack. Call once per thread. */
+/* Initializes the current thread's fnstack. Call once per validation thread. */
 void
 fnstack_init(void)
 {
@@ -52,31 +42,15 @@ fnstack_init(void)
 	int error;
 
 	files = pmalloc(sizeof(struct filename_stack));
-
-	files->filenames = pmalloc(32 * sizeof(char *));
 	files->len = 0;
-	files->size = 32;
 
 	error = pthread_setspecific(filenames_key, files);
-	if (error)
-		pr_err("pthread_setspecific() failed: %s", strerror(error));
-}
-
-void
-fnstack_cleanup(void)
-{
-	struct filename_stack *files;
-	int error;
-
-	files = pthread_getspecific(filenames_key);
-	if (files == NULL)
-		return;
-
-	fnstack_discard(files);
-
-	error = pthread_setspecific(filenames_key, NULL);
-	if (error)
-		pr_err("pthread_setspecific() failed: %s", strerror(error));
+	if (error) {
+		pr_err("pthread_setspecific() failed: %s. "
+		    "File name logging will be disabled for this thread.",
+		    strerror(error));
+		free(files);
+	}
 }
 
 /*
@@ -111,16 +85,18 @@ fnstack_push(char const *file)
 	struct filename_stack *files;
 
 	files = pthread_getspecific(filenames_key);
-	if (files == NULL || files->filenames == NULL)
+	if (!files)
 		return;
 
-	if (files->len >= files->size) {
-		files->filenames = prealloc(files->filenames,
-		    2 * files->size * sizeof(char *));
-		files->size *= 2;
+	files->len++;
+	if (files->len <= 0)
+		return;
+	if (FNSTACK_SIZE < files->len) {
+		pr_crit("File name stack is full!");
+		return;
 	}
 
-	files->filenames[files->len++] = file;
+	files->filenames[files->len - 1] = file;
 }
 
 /* See fnstack_push(). @map needs to outlive the push/pop. */
@@ -137,7 +113,7 @@ fnstack_peek(void)
 	struct filename_stack *files;
 
 	files = pthread_getspecific(filenames_key);
-	if (files == NULL || files->filenames == NULL || files->len == 0)
+	if (!files || files->len <= 0 || FNSTACK_SIZE < files->len)
 		return NULL;
 
 	return files->filenames[files->len - 1];
@@ -150,8 +126,12 @@ fnstack_pop(void)
 	struct filename_stack *files;
 
 	files = pthread_getspecific(filenames_key);
-	if (files == NULL || files->filenames == NULL || files->len == 0)
+	if (!files)
 		return;
 
 	files->len--;
+	if (files->len == -1) {
+		pr_crit("File name stack underflow!");
+		return;
+	}
 }
