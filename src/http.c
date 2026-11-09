@@ -206,8 +206,8 @@ check_same_origin(struct uri const *src, char const *redirect)
 
 	error = uri_same_origin(src, &redirect_url)
 	    ? 0
-	    : pr_err("%s is redirecting to %s; disallowing because of different origin.",
-	          uri_str(src), uri_str(&redirect_url));
+	    : pr_err("Redirecting to %s; disallowing because of different origin.",
+	          uri_str(&redirect_url));
 
 	uri_cleanup(&redirect_url);
 	return error;

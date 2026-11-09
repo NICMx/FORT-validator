@@ -2154,8 +2154,8 @@ validate_signedObject(struct extension_uris const *exts, struct uri const *url)
 		pr_panic("Certificate's signedObject was not recorded.");
 
 	if (!uri_equals(&exts->signedObject, url))
-		return pr_err("Certificate's signedObject (%s) does not match the URI of its own signed object (%s).",
-		    uri_str(&exts->signedObject), uri_str(url));
+		return pr_err("Certificate's signedObject (%s) does not match the URI of its own signed object.",
+		    uri_str(&exts->signedObject));
 
 	return 0;
 }

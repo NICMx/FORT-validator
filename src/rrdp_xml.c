@@ -1057,8 +1057,8 @@ init_notif_uri(struct rrdp_xml_reader *rdr, struct uri *uri,
 		return res;
 
 	if (!uri_same_origin(rdr->notif_uri, uri)) {
-		pr_err("(Line %u) Notification '%s' does not have the same origin as its %s: %s",
-		    rdr->line, uri_str(rdr->notif_uri), what, uri_str(uri));
+		pr_err("(Line %u) Notification does not have the same origin as its %s: %s",
+		    rdr->line, what, uri_str(uri));
 		return TRR_ERR;
 	}
 
