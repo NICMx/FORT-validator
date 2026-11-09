@@ -446,6 +446,7 @@ rrdp_update(struct uri const *notif_uri, char const *cage, time_t mtim,
 
 		error = handle_snapshot(&notif, session, &ctx->seq);
 		if (error)
+			/* TODO (fine) might want to rm_files here */
 			rrdpctx_free(ctx);
 		else
 			*result = ctx;
@@ -525,7 +526,11 @@ init_fallback(struct rrdp_dao *dao)
 		if (!dao->fb.obj ||
 		    INTEGER_cmp(&dao->fb.obj->mft.num, &fb->mft.num) < 0) {
 			dao->fb.session = ss;
+			if (dao->fb.obj)
+				fallback_free(dao->fb.obj, true);
 			dao->fb.obj = fb;
+		} else {
+			fallback_free(fb, true);
 		}
 	}
 }
@@ -649,6 +654,8 @@ rrdpdao_free(struct rrdp_dao *dao)
 {
 	if (dao) {
 		uri_cleanup(&dao->rpkiManifest);
+		if (dao->fb.obj)
+			fallback_free(dao->fb.obj, true);
 		free(dao);
 	}
 }

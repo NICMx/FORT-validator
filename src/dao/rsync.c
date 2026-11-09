@@ -274,20 +274,19 @@ find_fallbacks(struct rsync_ctx *ctx, char *path)
 	array.files = pcalloc(array.capacity, sizeof(struct cache_file *));
 
 	HASH_ITER(hh, ctx->fbs.ht, fb, tmpf)
-		for (; fb; fb = fb->next)
-			HASH_ITER(hh, fb->files.ht, ref, tmpr)
-				if (strcmp(ref->file->map.path, path) == 0) {
-					if (array.count == array.capacity) {
-						array.capacity <<= 1;
-						array.files = prealloc(
-						    array.files,
-						    array.capacity * sizeof(
-						        struct cache_file *
-						    )
-						);
-					}
-					array.files[array.count++] = ref->file;
+		HASH_ITER(hh, fb->files.ht, ref, tmpr)
+			if (strcmp(ref->file->map.path, path) == 0) {
+				if (array.count == array.capacity) {
+					array.capacity <<= 1;
+					array.files = prealloc(
+					    array.files,
+					    array.capacity * sizeof(
+						struct cache_file *
+					    )
+					);
 				}
+				array.files[array.count++] = ref->file;
+			}
 
 	return array;
 }
@@ -623,7 +622,6 @@ rsyncdao_downgrade(struct rsync_dao *dao)
 struct mft_meta const *
 rsyncdao_fallback_mftnum(struct rsync_dao const *dao)
 {
-	/* XXX There can be multiple fallbacks (RRDP too apparently) */
 	return (dao && dao->fb) ? &dao->fb->mft : NULL;
 }
 
@@ -634,7 +632,6 @@ rsyncdao_commit(struct rsync_dao *dao, struct rpp *rpp)
 
 	switch (dao->state) {
 	case RDS_REFRESH:
-		/* XXX it might add it multiple times. */
 		fallback_add(&dao->ctx->fbs, &dao->rpkiManifest, rpp);
 		break;
 	case RDS_FALLBACK:
@@ -652,6 +649,8 @@ rsyncdao_free(struct rsync_dao *dao)
 {
 	if (dao) {
 		uri_cleanup(&dao->rpkiManifest);
+		if (dao->fb)
+			fallback_free(dao->fb, true);
 		free(dao);
 	}
 }

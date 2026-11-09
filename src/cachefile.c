@@ -463,15 +463,20 @@ fail:	json_decref(jmft);
 }
 
 struct fallback *
-fallback_find(struct fallback_ht *fbs, struct uri const *caRepo)
+fallback_find(struct fallback_ht *fbs, struct uri const *rpkiMft)
 {
 	char const *key;
 	size_t kl;
 	struct fallback *result;
 
-	key = uri_str(caRepo);
-	kl = uri_len(caRepo);
+	key = uri_str(rpkiMft);
+	kl = uri_len(rpkiMft);
+
+	mutex_lock(&fbs->lock);
 	HASH_FIND(hh, fbs->ht, key, kl, result);
+	if (result)
+		atomic_fetch_add(&result->refcount, 1);
+	mutex_unlock(&fbs->lock);
 
 	return result;
 }
@@ -484,12 +489,43 @@ fallback_has_path(struct fallback_ht *fbs, char const *path)
 	struct cache_file_ref *ref, *tmpref;
 
 	HASH_ITER(hh, fbs->ht, fb, tmpfb)
-		for (; fb; fb = fb->next)
-			HASH_ITER(hh, fb->files.ht, ref, tmpref)
-				if (strcmp(path, ref->file->map.path) == 0)
-					return true;
+		HASH_ITER(hh, fb->files.ht, ref, tmpref)
+			if (strcmp(path, ref->file->map.path) == 0)
+				return true;
 
 	return false;
+}
+
+static void
+add_fb(struct fallback_ht *fbs, struct fallback *fb)
+{
+	char const *key;
+	size_t keylen;
+	unsigned int hash;
+	struct fallback *old;
+
+	key = uri_str(&fb->rpkiManifest);
+	keylen = uri_len(&fb->rpkiManifest);
+	HASH_VALUE(key, keylen, hash);
+	old = NULL;
+
+	mutex_lock(&fbs->lock);
+
+	HASH_FIND_BYHASHVALUE(hh, fbs->ht, key, keylen, hash, old);
+	if (old) {
+		if (old->committed && INTEGER_cmp(&old->mft.num, &fb->mft.num) >= 0) {
+			/* Reject it; we have a better one. */
+			fallback_free(fb, true);
+			goto end;
+		}
+
+		HASH_DELETE(hh, fbs->ht, old);
+		fallback_free(old, true);
+	}
+
+	HASH_ADD_KEYPTR_BYHASHVALUE(hh, fbs->ht, key, keylen, hash, fb);
+
+end:	mutex_unlock(&fbs->lock);
 }
 
 /* Steals @rpp's files. */
@@ -497,10 +533,8 @@ fallback_has_path(struct fallback_ht *fbs, char const *path)
 void
 fallback_add(struct fallback_ht *fbs, struct uri *rpkiManifest, struct rpp *rpp)
 {
-	struct fallback *fb, *old;
+	struct fallback *fb;
 	array_index i;
-	char const *key;
-	size_t keylen;
 
 	fb = pzalloc(sizeof(struct fallback));
 	uri_copy(&fb->rpkiManifest, rpkiManifest);
@@ -509,17 +543,9 @@ fallback_add(struct fallback_ht *fbs, struct uri *rpkiManifest, struct rpp *rpp)
 	fb->mft = rpp->mft;
 	memset(&rpp->mft, 0, sizeof(rpp->mft));
 	fb->committed = true;
+	atomic_init(&fb->refcount, 1);
 
-	key = uri_str(&fb->rpkiManifest);
-	keylen = uri_len(&fb->rpkiManifest);
-
-	mutex_lock(&fbs->lock);
-	HASH_ADD_KEYPTR_SAFE(fbs->ht, key, keylen, fb, old);
-	if (old) {
-		fb->next = old->next;
-		old->next = fb;
-	}
-	mutex_unlock(&fbs->lock);
+	add_fb(fbs, fb);
 
 	free(rpp->files);
 	rpp->files = NULL;
@@ -534,12 +560,13 @@ fallback_commit(struct fallback_ht *ht, struct fallback *fb)
 	mutex_unlock(&ht->lock);
 }
 
-/* Notice the result */
-static struct fallback *
+void
 fallback_free(struct fallback *fb, bool rm_files)
 {
-	struct fallback *next = fb->next;
 	char *mftnum;
+
+	if (atomic_fetch_sub(&fb->refcount, 1) != 1)
+		return;
 
 	if (pr_trc_enabled()) {
 		mftnum = asn_INTEGER2str(&fb->mft.num);
@@ -553,16 +580,6 @@ fallback_free(struct fallback *fb, bool rm_files)
 	filerefs_clear(&fb->files, rm_files);
 	mftm_cleanup(&fb->mft);
 	free(fb);
-
-	return next;
-}
-
-/* Notice the plural. */
-void
-fallbacks_free(struct fallback *fb, bool rm_files)
-{
-	while (fb)
-		fb = fallback_free(fb, rm_files);
 }
 
 void
@@ -572,46 +589,20 @@ fallbacks_clear(struct fallback_ht *fbs, bool rm_files)
 
 	HASH_ITER(hh, fbs->ht, fb, tmp) {
 		HASH_DEL(fbs->ht, fb);
-		fallbacks_free(fb, rm_files);
+		fallback_free(fb, rm_files);
 	}
 }
 
 void
 fallbacks_cleanup(struct fallback_ht *fbs)
 {
-	struct fallback *first, *cursor, *newest, *tmpf;
+	struct fallback *fb, *tmp;
 
-	HASH_ITER(hh, fbs->ht, first, tmpf) {
-		newest = NULL;
-		for (cursor = first; cursor; cursor = cursor->next)
-			if (cursor->committed)
-				if (!newest || INTEGER_cmp(&cursor->mft.num, &newest->mft.num) > 0)
-					newest = cursor;
-
-		if (!newest) {
-			HASH_DEL(fbs->ht, first);
-			fallbacks_free(first, true);
-			continue;
+	HASH_ITER(hh, fbs->ht, fb, tmp)
+		if (!fb->committed) {
+			HASH_DEL(fbs->ht, fb);
+			fallback_free(fb, true);
 		}
-
-		if (first != newest) {
-			struct files_ht tmp_files;
-			struct mft_meta tmp_mft;
-
-			tmp_files = first->files;
-			first->files = newest->files;
-			newest->files = tmp_files;
-
-			tmp_mft = first->mft;
-			first->mft = newest->mft;
-			newest->mft = tmp_mft;
-
-			first->committed = true;
-		}
-
-		fallbacks_free(first->next, true);
-		first->next = NULL;
-	}
 }
 
 static void
@@ -634,11 +625,10 @@ fallback_print(struct fallback *fb, int indent)
 void
 fallbacks_print(struct fallback_ht *fbs, int indent)
 {
-	struct fallback *fb, *tmp2;
+	struct fallback *fb, *tmp;
 
-	HASH_ITER(hh, fbs->ht, fb, tmp2)
-		for (; fb; fb = fb->next)
-			fallback_print(fb, indent);
+	HASH_ITER(hh, fbs->ht, fb, tmp)
+		fallback_print(fb, indent);
 }
 
 json_t *
@@ -712,6 +702,8 @@ json2fallback(json_t *json, char const *key, struct files_ht *refs,
 	error = json_get_ts(jmft, "update", &fb->mft.update);
 	if (error)
 		goto mft;
+
+	atomic_init(&fb->refcount, 1);
 
 	*result = fb;
 	return 0;

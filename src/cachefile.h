@@ -81,14 +81,17 @@ struct mft_meta {
 json_t *mft2json(struct mft_meta *);
 
 struct fallback {
+	/* Constant during multithreading */
+
 	struct uri rpkiManifest;	/* TODO (fine) Redundant? See @mft */
 	struct files_ht files;
 	struct mft_meta mft;		/* file points to @files, no refcount */
 
-	bool committed;			/* Freshly committed? */
+	/* Need table lock during multithreading */
 
+	bool committed;			/* Freshly committed? */
 	UT_hash_handle hh;
-	struct fallback *next;		/* Fallbacks that share rpkiManifest */
+	atomic_uint refcount;
 };
 
 struct fallback_ht {
@@ -102,7 +105,7 @@ bool fallback_has_path(struct fallback_ht *, char const *);
 struct rpp;
 void fallback_add(struct fallback_ht *, struct uri *, struct rpp *);
 void fallback_commit(struct fallback_ht *, struct fallback *);
-void fallbacks_free(struct fallback *, bool);
+void fallback_free(struct fallback *, bool);
 void fallbacks_clear(struct fallback_ht *, bool);
 void fallbacks_cleanup(struct fallback_ht *);
 void fallbacks_print(struct fallback_ht *, int);
