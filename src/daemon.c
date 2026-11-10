@@ -93,8 +93,11 @@ daemonize(daemon_log_cb log_cb)
 		fds--;
 	}
 
-	/* No privileges revoked to create files/dirs */
-	umask(0);
+	/*
+	 * Keep the file mode creation mask of the caller (as daemon(3) does).
+	 * Files and directories are created with 0666/0777, so umask(0) made
+	 * the cache, the RTR state and the output writable by everybody.
+	 */
 
 	if (chdir(pwd) < 0) {
 		error = errno;
