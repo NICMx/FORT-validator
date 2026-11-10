@@ -393,16 +393,6 @@ file_mv(char const *from, char const *to)
 	return 0;
 }
 
-/* XXX delete? */
-void
-file_ln(char const *oldpath, char const *newpath)
-{
-	pr_trc("ln %s %s", oldpath, newpath);
-	if (link(oldpath, newpath) < 0)
-		pr_wrn("Could not hard-link %s to %s: %s",
-		    newpath, oldpath, strerror(errno));
-}
-
 void
 cseq_init(struct cache_sequence *seq, char const *prefix, unsigned long id,
     bool free_prefix)

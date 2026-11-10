@@ -44,7 +44,6 @@ int file_rm_f(char const *);
 int file_rm_rf(char const *);
 int file_mkdir(char const *, bool);
 int file_mv(char const *, char const *);
-void file_ln(char const *, char const *);
 
 struct cache_sequence {
 	struct sized_string pfx;
