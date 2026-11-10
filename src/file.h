@@ -36,6 +36,7 @@ void file_free(struct file_contents *);
 int file_stat_errno(char const *);
 bool file_isreg(char const *);
 bool file_is_valid(char const *, bool);
+char const *file_basename(char const *);
 
 typedef int (*nftw_cb)(const char *, int, void *);
 int file_nftw(const char *, nftw_cb, void *);

@@ -190,7 +190,7 @@ tal_traverse(struct validation_thread *vt, char const *path)
 	struct tal *tal;
 	validation_verdict vv;
 
-	fnstack_push(path);
+	fnstack_push(file_basename(path));
 
 	tal = tal_create(path);
 	if (!tal) {

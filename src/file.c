@@ -202,6 +202,14 @@ file_is_valid(char const *location, bool allow_file)
 	return result;
 }
 
+char const *
+file_basename(char const *path)
+{
+	char *slash;
+	slash = strrchr(path, '/');
+	return slash ? (slash + 1) : path;
+}
+
 /*
  * Like remove(), but don't care if the file is already deleted.
  */
