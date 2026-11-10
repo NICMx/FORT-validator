@@ -91,7 +91,7 @@ find_path_in_fallbacks(char const *path, struct fallback_ht *fbs)
 
 /* Swallows @path on success */
 static int
-add_file(struct files_ht *table, struct cache_mapping *root, char *path,
+add_file(struct files_ht *table, struct cache_mapping const *root, char *path,
     struct fallback_ht *fbs)
 {
 	unsigned char csum[EVP_MAX_MD_SIZE];
@@ -134,7 +134,7 @@ add_file(struct files_ht *table, struct cache_mapping *root, char *path,
 }
 
 static int
-index_files(struct cache_mapping *ctx_root, char const *root_path,
+index_files(struct cache_mapping const *ctx_root, char const *root_path,
     struct files_ht *files, struct fallback_ht *fbs)
 {
 	struct string_arraylist dirs;
@@ -209,7 +209,7 @@ cancel:	free(dirpath);
 }
 
 int
-rsync_reindex(struct rsync_ctx **_ctx, struct cache_mapping *root)
+rsync_reindex(struct rsync_ctx **_ctx, struct cache_mapping const *root)
 {
 	struct rsync_ctx *ctx = *_ctx;
 	int error;

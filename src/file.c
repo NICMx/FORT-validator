@@ -401,6 +401,10 @@ file_mv(char const *from, char const *to)
 	return 0;
 }
 
+/*
+ * Because of cseq_next()'s implementation, @prefix should not have a trailing
+ * '/'.
+ */
 void
 cseq_init(struct cache_sequence *seq, char const *prefix, unsigned long id,
     bool free_prefix)
@@ -462,7 +466,6 @@ cseq_next(struct cache_sequence *seq, char const **id)
 	do {
 		path = pmalloc(seq->pathlen);
 
-		// XXX not generic enough
 		len = snprintf(path, seq->pathlen, "%s/%lX",
 		    seq->pfx.str, seq->next_id);
 		if (len < 0) {

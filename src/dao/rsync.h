@@ -19,7 +19,7 @@
 struct rsync_ctx;
 
 /* Rebuild index file; needs to be called after rsync refresh */
-int rsync_reindex(struct rsync_ctx **, struct cache_mapping *);
+int rsync_reindex(struct rsync_ctx **, struct cache_mapping const *);
 /*
  * Cache directory post-processing (after validation cycle).
  * Mostly deletes files that no longer need to be preserved.
