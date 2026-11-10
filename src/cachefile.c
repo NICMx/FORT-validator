@@ -481,21 +481,6 @@ fallback_find(struct fallback_ht *fbs, struct uri const *rpkiMft)
 	return result;
 }
 
-/* Very slow! Meant for cache cleanups only. */
-bool
-fallback_has_path(struct fallback_ht *fbs, char const *path)
-{
-	struct fallback *fb, *tmpfb;
-	struct cache_file_ref *ref, *tmpref;
-
-	HASH_ITER(hh, fbs->ht, fb, tmpfb)
-		HASH_ITER(hh, fb->files.ht, ref, tmpref)
-			if (strcmp(path, ref->file->map.path) == 0)
-				return true;
-
-	return false;
-}
-
 static void
 add_fb(struct fallback_ht *fbs, struct fallback *fb)
 {

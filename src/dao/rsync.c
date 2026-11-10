@@ -70,9 +70,8 @@ struct rsync_ctx {
 	struct cache_sequence fbseq;
 };
 
-/* XXX duplicate; see fallback_has_path() */
 static struct cache_file *
-find_path_in_fallbacks(char const *path, struct fallback_ht *fbs)
+find_path_in_fallbacks(struct fallback_ht *fbs, char const *path)
 {
 	struct fallback *fb, *tmp1;
 	struct cache_file_ref *ref, *tmp2;
@@ -102,7 +101,7 @@ add_file(struct files_ht *table, struct cache_mapping const *root, char *path,
 	struct uri uri;
 	struct cache_file *file;
 
-	file = find_path_in_fallbacks(path, fbs);
+	file = find_path_in_fallbacks(fbs, path);
 	if (file) {
 		filerefs_add_uri(table, file, 1);
 		free(path);
@@ -398,7 +397,7 @@ rm_if_not_fallbacked(const char *path, int type, void *arg)
 		return 0;
 	}
 
-	if (!fallback_has_path(&ctx->fbs, path) && unlink(path) == 0)
+	if (!find_path_in_fallbacks(&ctx->fbs, path) && unlink(path) == 0)
 		pr_trc("rm %s", path);
 
 	return 0;
