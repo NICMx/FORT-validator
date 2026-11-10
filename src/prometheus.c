@@ -140,16 +140,31 @@ prometheus_setup(void)
 	pr_trc("Starting Prometheus server...");
 
 	prometheus_daemon = MHD_start_daemon(
-	    MHD_USE_THREAD_PER_CONNECTION,	/* flags */
-	    fortcfg.prometheus.port,		/* port */
-	    NULL, NULL,				/* accept policy */
-	    &handle_prometheus_req, NULL,	/* handler */
-	    MHD_OPTION_END			/* options */
+	    /* flags */
+	    MHD_USE_INTERNAL_POLLING_THREAD |
+	    MHD_USE_THREAD_PER_CONNECTION |
+	    MHD_USE_ERROR_LOG,
+	    /* port */
+	    fortcfg.prometheus.port,
+	    /* accept policy */
+	    NULL, NULL,
+	    /* handler */
+	    &handle_prometheus_req, NULL,
+	    /* options */
+	    MHD_OPTION_EXTERNAL_LOGGER, pr_mhd, NULL,
+	    MHD_OPTION_END
 	);
 
 	if (prometheus_daemon == NULL)
-		/* XXX is there really no way to get a f*****g error message */
-		return pr_err("Could not start Prometheus server; Unknown error");
+		/*
+		 * libmicrohttpd manual:
+		 * > Note that MHD will not generate any log messages (...) if
+		 * > MHD was compiled with the "--disable-messages" flag.
+		 */
+		return pr_err("Could not start Prometheus server. "
+		    "If libmicrohttpd did not print an error message above, "
+		    "try reviewing whether port %u is available.",
+		    fortcfg.prometheus.port);
 
 	pr_trc("Prometheus server started.");
 	return 0;

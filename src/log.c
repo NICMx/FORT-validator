@@ -35,23 +35,28 @@ struct level {
 	char const *name;
 	char const *color;
 	char const *rst;
-	bool print_filenames;
+
+#define LVF_PR_FILENAMES (1 << 0)	/* console and file only */
+#define LVF_PR_NEWLINE   (1 << 1)	/* console and file only */
+	int flags;
 };
 
 #ifdef PR_CLUTTER_ENABLED
-static struct level CLT = { LOG_DEBUG, "CLT", "clutter", CLR_CLT, CLR_RST, false };
+static struct level CLT = { LOG_DEBUG, "CLT", "clutter", CLR_CLT, CLR_RST, LVF_PR_NEWLINE };
 #endif
-static struct level TRC = { LOG_DEBUG, "TRC", "trace", CLR_TRC, CLR_RST, false };
-static struct level INF = { LOG_INFO, "INF", "info", "", "", false };
-static struct level WRN = { LOG_WARNING, "WRN", "warning", CLR_WRN, CLR_RST, false };
-static struct level ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST, false };
-static struct level CRT = { LOG_CRIT, "CRT", "critical", CLR_CRT, CLR_RST, false };
-static struct level PNC = { LOG_EMERG, "PNC", "panic", CLR_PNC, CLR_RST, false };
+static struct level TRC = { LOG_DEBUG, "TRC", "trace", CLR_TRC, CLR_RST, LVF_PR_NEWLINE };
+static struct level INF = { LOG_INFO, "INF", "info", "", "", LVF_PR_NEWLINE };
+static struct level WRN = { LOG_WARNING, "WRN", "warning", CLR_WRN, CLR_RST, LVF_PR_NEWLINE };
+static struct level ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST, LVF_PR_NEWLINE };
+static struct level CRT = { LOG_CRIT, "CRT", "critical", CLR_CRT, CLR_RST, LVF_PR_NEWLINE };
+static struct level PNC = { LOG_EMERG, "PNC", "panic", CLR_PNC, CLR_RST, LVF_PR_NEWLINE };
 
 /* Validation warning (reported, so logged on trace level, except yellow) */
-static struct level TRC_WRN = { LOG_DEBUG, "TRW", NULL, CLR_WRN, CLR_RST, true };
+static struct level TRC_WRN = { LOG_DEBUG, "TRW", NULL, CLR_WRN, CLR_RST, LVF_PR_NEWLINE | LVF_PR_FILENAMES };
 /* Validation error (reported, so logged on trace level, except red) */
-static struct level TRC_ERR = { LOG_DEBUG, "TRE", NULL, CLR_ERR, CLR_RST, true };
+static struct level TRC_ERR = { LOG_DEBUG, "TRE", NULL, CLR_ERR, CLR_RST, LVF_PR_NEWLINE | LVF_PR_FILENAMES };
+
+static struct level MHD_ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST, 0 };
 
 struct logger {
 	void (*cb)(struct logger *, struct level *, char const *, va_list);
@@ -178,10 +183,13 @@ stream_print(FILE *out, struct logger *lgr, struct level *lvl,
 		fprintf(out, "%s", lvl->color);
 	print_timestamp(out, lgr->tst);
 	fprintf(out, "%s: ", lvl->tag);
-	if (lvl->print_filenames)
+	if (lvl->flags & LVF_PR_FILENAMES)
 		print_filename(out);
 	vfprintf(out, fmt, vl);
-	fprintf(out, "%s\n", lgr->color ? lvl->rst : "");
+	if (lvl->color)
+		fprintf(out, "%s", lvl->rst);
+	if (lvl->flags & LVF_PR_NEWLINE)
+		fprintf(out, "\n");
 
 	if (lgr->lock)
 		pthread_mutex_unlock(lgr->lock);
@@ -581,4 +589,18 @@ enomem_panic(void)
 			vcb(lgr, &CRT, "Out of memory");
 
 	exit(ENOMEM);
+}
+
+void
+pr_mhd(void *arg, const char *fmt, va_list ap)
+{
+	struct logger *lgr;
+	va_list args;
+
+	SLIST_FOREACH(lgr, &listeners, lh)
+		if (MHD_ERR.id <= lgr->lvl->id) {
+			va_copy(args, ap);
+			lgr->cb(lgr, &MHD_ERR, fmt, args);
+			va_end(args);
+		}
 }

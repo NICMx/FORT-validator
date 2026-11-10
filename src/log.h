@@ -103,4 +103,7 @@ __dead void enomem_panic(void); /* Out of memory */
 		fflush(stdout);						\
 	} while (0)
 
+/* Specifically for microhttpd logs */
+void pr_mhd(void *, const char *, va_list);
+
 #endif /* SRC_LOG_H_ */
