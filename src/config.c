@@ -325,18 +325,6 @@ static const struct option_field options[] = {
 		.json_null_allowed = true,
 	},
 
-	/* RRDP */
-	{
-		.id = 10000,
-		.name = "rrdp.delta-threshold",
-		.type = &gt_uint,
-		.offset = offsetof(struct fort_config, rrdp.delta_threshold),
-		.doc = "Maximum deltas to explode per RRDP session, per iteration. "
-		       "(Fall back to snapshot if threshold exceeded.)",
-		.min = 1,	/* Must be > 0! */
-		.max = 128,
-	},
-
 	/* Logging fields */
 	{
 		.id = 4000,
@@ -630,9 +618,6 @@ set_default_values(void)
 	fortcfg.http.max_file_size = 2000000000;
 	fortcfg.http.ca_path = NULL; /* Use system default */
 	fortcfg.http.proxy = NULL;
-
-	/* TODO (fine) 64 may be too little; optimize. */
-	fortcfg.rrdp.delta_threshold = 64;
 
 	fortcfg.log.syslog.level.state = LLS_UNSET;
 	fortcfg.log.console.level.state = LLS_UNSET;

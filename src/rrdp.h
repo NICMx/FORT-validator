@@ -6,6 +6,19 @@
 #include "types/rpp.h"
 #include "types/uri.h"
 
+/*
+ * Maximum deltas to explode per RRDP session, per iteration.
+ *
+ * (If the RRDP notification lists more than this amount of unprocessed deltas,
+ * Fort will reset the session, exploding the snapshot instead.)
+ *
+ * It's also the maximum number of delta hashes Fort will remember per RRDP
+ * session, to detect session desynchronization.
+ *
+ * TODO (fine) 64 may be too little; optimize.
+ */
+#define RRDP_DELTA_THRESHOLD 64u
+
 struct rrdp_ctx;
 
 int rrdp_update(struct uri const *, char const *, time_t, bool *,

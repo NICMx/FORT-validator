@@ -8,6 +8,7 @@
 #include "config.h"
 #include "http.h"
 #include "log.h"
+#include "rrdp.h"
 #include "types/fnstack.h"
 
 /*
@@ -978,7 +979,7 @@ init_min_serial(struct rrdp_xml_reader *rdr)
 		    rdr->line);
 		goto fail;
 	}
-	if (!BN_sub_word(min, fortcfg.rrdp.delta_threshold)) {
+	if (!BN_sub_word(min, RRDP_DELTA_THRESHOLD)) {
 		pr_err("(Line %u) Cannot subtract serial: Unknown error",
 		    rdr->line);
 		goto fail;
