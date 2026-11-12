@@ -172,7 +172,6 @@ v6addr2str2(struct in6_addr const *addr)
 
 struct fort_config fortcfg = {
 	.tal = "tal/",
-	.rrdp.delta_threshold = 5,
 	.rsync.enabled = true,
 	.http.enabled = true,
 };

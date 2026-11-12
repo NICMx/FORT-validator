@@ -17,7 +17,9 @@
  *
  * TODO (fine) 64 may be too little; optimize.
  */
+#ifndef RRDP_DELTA_THRESHOLD
 #define RRDP_DELTA_THRESHOLD 64u
+#endif
 
 struct rrdp_ctx;
 

@@ -1,6 +1,7 @@
 #include <check.h>
 
 #define MAX_TKN_SIZE 120
+#define RRDP_DELTA_THRESHOLD 5
 
 #include "alloc.c"
 #include "asn1/asn1c/INTEGER.c"
@@ -878,7 +879,7 @@ START_TEST(notif_bad_data_types)
 		"(Line 2) Not a valid hash: 0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD",
 		"(Line 2) 'https://h[o]st/9d8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
 		"(Line 2) 'https://ho st/9d-8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
-		"(Line 2) Notification 'https://a/n.xml' does not have the same origin as its Snapshot: https://different-host/9d-8/3/snapshot.xml",
+		"(Line 2) Notification does not have the same origin as its Snapshot: https://different-host/9d-8/3/snapshot.xml",
 	};
 	size_t i;
 
@@ -1363,7 +1364,6 @@ main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	fortcfg.rrdp.delta_threshold = 5;
 	fortcfg.http.max_file_size = 10000;
 
 	suite = create_suite();
