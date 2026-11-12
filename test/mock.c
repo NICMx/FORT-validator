@@ -200,7 +200,7 @@ ck_assert_uri(char const *expected, struct uri const *actual)
 void
 touch_dir(char const *dir)
 {
-	ck_assert(mkdir(dir, CACHE_FILEMODE) == 0 || errno == EEXIST);
+	ck_assert(mkdir(dir, CACHE_DIRMODE) == 0 || errno == EEXIST);
 }
 
 void

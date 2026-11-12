@@ -253,7 +253,7 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 		compare_dest = NULL;
 
 		pr_trc("mkdir %s", dest);
-		if (mkdir(dest, CACHE_FILEMODE) < 0) {
+		if (mkdir(dest, CACHE_DIRMODE) < 0) {
 			error = errno;
 			if (error != EEXIST) {
 				pr_err("Cannot create '%s': %s",

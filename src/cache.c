@@ -372,7 +372,7 @@ cache_setup_lock(void)
 
 	pr_trc("echo $PID > " LOCKFILE);
 
-	fd = open(LOCKFILE, O_WRONLY | O_CREAT | O_EXCL, 0644);
+	fd = open(LOCKFILE, O_WRONLY | O_CREAT | O_EXCL, CACHE_FILEMODE);
 	if (fd < 0) {
 		error = errno;
 		if (error == EEXIST)

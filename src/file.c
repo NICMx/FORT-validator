@@ -374,7 +374,7 @@ file_mkdir(char const *path, bool force)
 	int error;
 
 	pr_trc("mkdir %s%s", force ? "-f " : "", path);
-	if (mkdir(path, CACHE_FILEMODE) < 0) {
+	if (mkdir(path, CACHE_DIRMODE) < 0) {
 		error = errno;
 		if (!force || error != EEXIST) {
 			pr_err("Cannot create '%s': %s",

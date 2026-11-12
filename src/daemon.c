@@ -281,8 +281,10 @@ daemonize(void)
 	}
 
 	/* 10. Reset the umask. */
-	if (umask(0) != 0)
-		pr_crit("File mode creation mask was not zero");
+	/*
+	 * Denied; zeroizing the umask makes the cache insecure.
+	 * Best preserve the umask already set up by main().
+	 */
 
 	/* 11. cd / */
 	/*

@@ -32,7 +32,8 @@ void panic_on_fail(int, char const *);
 void mutex_lock(pthread_mutex_t *);
 void mutex_unlock(pthread_mutex_t *);
 
-#define CACHE_FILEMODE 0755
+#define CACHE_FILEMODE 0644
+#define CACHE_DIRMODE 0755
 
 typedef int (*foreach_file_cb)(char const *, void *);
 int foreach_file(char const *, char const *, bool, foreach_file_cb, void *);

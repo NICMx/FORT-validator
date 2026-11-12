@@ -21,6 +21,20 @@
 #include "task.h"
 #include "types/fnstack.h"
 
+/*
+ * Ensure future open()s and fopen()s refuse to enable the user and group write
+ * flags.
+ */
+static void
+force_safe_umask(void)
+{
+	mode_t mask;
+
+	mask = umask(022);
+	if (mask != 022)
+		umask(mask | 022);
+}
+
 static int
 queue_tal(char const *tal_path, void *arg)
 {
@@ -287,6 +301,7 @@ main(int argc, char **argv)
 	/* Also: Daemonizing will close all file descriptors. */
 
 	log_setup();
+	force_safe_umask();
 
 	verdict = handle_flags_config(argc, argv);
 	if (verdict == IV_FAIL) {
