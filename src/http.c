@@ -4,6 +4,8 @@
 #include "file.h"
 #include "log.h"
 
+#define MAX_REDIRECTS 1
+
 struct http_handler {
 	CURL *curl;
 	char errbuf[CURL_ERROR_SIZE];
@@ -298,8 +300,10 @@ http_download(struct uri const *src, curl_write_callback writer,
 
 		if (redirect_const == NULL)
 			break;
+		pr_trc("Attempting redirect: %s", redirect_const);
+
 		r++;
-		if (r > fortcfg.http.max_redirs) {
+		if (r > MAX_REDIRECTS) {
 			error = pr_err("Too many redirects.");
 			goto end;
 		}

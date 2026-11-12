@@ -260,14 +260,6 @@ static const struct option_field options[] = {
 		.doc = "User-Agent to use at HTTP requests, eg. Fort Validator Local/1.0",
 		.json_null_allowed = false,
 	}, {
-		.id = 9012,
-		.name = "http.max-redirs",
-		.type = &gt_uint,
-		.offset = offsetof(struct fort_config, http.max_redirs),
-		.doc = "Maximum number of redirections to follow, per HTTP request.",
-		.min = 0,
-		.max = UINT_MAX,
-	}, {
 		.id = 9005,
 		.name = "http.connect-timeout",
 		.type = &gt_uint,
@@ -610,7 +602,6 @@ set_default_values(void)
 
 	fortcfg.http.enabled = true;
 	fortcfg.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
-	fortcfg.http.max_redirs = 10;
 	fortcfg.http.connect_timeout = 30;
 	fortcfg.http.transfer_timeout = 900;
 	fortcfg.http.low_speed_limit = 100000;

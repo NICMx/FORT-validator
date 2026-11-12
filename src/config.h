@@ -74,8 +74,6 @@ struct fort_config {
 		bool enabled;
 		/* HTTP User-Agent request header */
 		char *user_agent;
-		/* Allowed redirects per request XXX hardcode? */
-		unsigned int max_redirs;
 		/* CURLOPT_CONNECTTIMEOUT */
 		unsigned int connect_timeout;
 		/* CURLOPT_TIMEOUT */
