@@ -15,5 +15,6 @@ enum resource_cmp_result res6_add_range(struct resources_ipv6 *, struct ipv6_ran
 bool res6_empty(struct resources_ipv6 const *ips);
 bool res6_contains_prefix(struct resources_ipv6 *, struct ipv6_prefix const *);
 bool res6_contains_range(struct resources_ipv6 *, struct ipv6_range const *);
+void res6_print(struct resources_ipv6 *ips);
 
 #endif /* SRC_RESOURCE_IP6_H_ */

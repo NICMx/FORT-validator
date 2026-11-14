@@ -1,5 +1,7 @@
 #include "resource/asn.h"
 
+#include <stdio.h>
+
 struct asn_cb {
 	foreach_asn_cb cb;
 	void *arg;
@@ -81,6 +83,38 @@ rasn_matches(struct resources_asn *_asns, uint32_t asn)
 
 	range.min = range.max = asn;
 	return sarray_contains(asns, &range);
+}
+
+static int
+print_node(void *_range, void *_first)
+{
+	struct asn_range *range = _range;
+	bool *first = _first;
+
+	if (!(*first))
+		printf(", ");
+	*first = false;
+
+	if (range->min == range->max)
+		printf("%u", range->min);
+	else
+		printf("%u-%u", range->min, range->max);
+
+	return 0;
+}
+
+void
+asn_print(struct resources_asn *asns)
+{
+	bool first;
+
+	if (!asns) {
+		printf("null");
+		return;
+	}
+
+	first = true;
+	sarray_foreach((struct sorted_array *) asns, print_node, &first);
 }
 
 static int

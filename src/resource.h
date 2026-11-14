@@ -47,4 +47,6 @@ void resources_set_policy(struct resources *, enum rpki_policy);
 
 int resources_foreach_asn(struct resources *, foreach_asn_cb, void *);
 
+void resources_print(struct resources *, char const *);
+
 #endif /* SRC_RESOURCE_H_ */

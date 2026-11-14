@@ -25,6 +25,7 @@ enum resource_cmp_result rasn_add(struct resources_asn *,
 bool rasn_empty(struct resources_asn *);
 bool rasn_contains(struct resources_asn *, struct asn_range const *);
 bool rasn_matches(struct resources_asn *, uint32_t);
+void asn_print(struct resources_asn *);
 
 typedef int (*foreach_asn_cb)(struct asn_range const *, void *);
 int rasn_foreach(struct resources_asn *, foreach_asn_cb, void *);

@@ -136,3 +136,45 @@ res6_contains_range(struct resources_ipv6 *ips, struct ipv6_range const *range)
 {
 	return sarray_contains((struct sorted_array *) ips, range);
 }
+
+static void
+print_addr(struct in6_addr *addr)
+{
+	char buf[INET6_ADDRSTRLEN];
+	printf("%s", inet_ntop(AF_INET6, addr, buf, INET6_ADDRSTRLEN));
+}
+
+static int
+print_node(void *_range, void *_first)
+{
+	struct ipv6_range *range = _range;
+	bool *first = _first;
+
+	if (!(*first))
+		printf(", ");
+	*first = false;
+
+	if (memcmp(&range->min, &range->max, sizeof(range->min)) == 0) {
+		print_addr(&range->min);
+	} else {
+		print_addr(&range->min);
+		printf("-");
+		print_addr(&range->max);
+	}
+
+	return 0;
+}
+
+void
+res6_print(struct resources_ipv6 *ips)
+{
+	bool first;
+
+	if (!ips) {
+		printf("null");
+		return;
+	}
+
+	first = true;
+	sarray_foreach((struct sorted_array *) ips, print_node, &first);
+}

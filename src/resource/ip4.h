@@ -17,5 +17,6 @@ enum resource_cmp_result res4_add_range(struct resources_ipv4 *,
 bool res4_empty(struct resources_ipv4 const *);
 bool res4_contains_prefix(struct resources_ipv4 *, struct ipv4_prefix const *);
 bool res4_contains_range(struct resources_ipv4 *, struct ipv4_range const *);
+void res4_print(struct resources_ipv4 *);
 
 #endif /* SRC_RESOURCE_IP4_H_ */

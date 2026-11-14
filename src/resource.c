@@ -600,3 +600,23 @@ resources_foreach_asn(struct resources *res, foreach_asn_cb cb, void *arg)
 {
 	return rasn_foreach(res->asns, cb, arg);
 }
+
+void
+resources_print(struct resources *res, char const *pfx)
+{
+	printf("%s: ", pfx ? pfx : "Resources");
+
+	if (!res) {
+		printf("null\n");
+		return;
+	}
+
+	printf("policy:%u force_inherit:%u\n", res->policy, res->force_inherit);
+	printf("- ");
+	res4_print(res->ip4s);
+	printf("\n- ");
+	res6_print(res->ip6s);
+	printf("\n- ");
+	asn_print(res->asns);
+	printf("\n");
+}
