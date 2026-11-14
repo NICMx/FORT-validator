@@ -119,7 +119,7 @@ add_prefix4(struct resources *resources, struct resources *parent,
 	int error;
 	enum resource_cmp_result result;
 
-	if (parent && (resources->ip4s == parent->ip4s))
+	if (parent && resources->ip4s && (resources->ip4s == parent->ip4s))
 		return pr_err("Certificate defines IPv4 prefixes while also inheriting its parent's.");
 
 	error = prefix4_decode(addr, &prefix);
@@ -161,7 +161,7 @@ add_prefix6(struct resources *resources, struct resources *parent,
 	int error;
 	enum resource_cmp_result result;
 
-	if (parent && (resources->ip6s == parent->ip6s))
+	if (parent && resources->ip6s && (resources->ip6s == parent->ip6s))
 		return pr_err("Certificate defines IPv6 prefixes while also inheriting its parent's.");
 
 	error = prefix6_decode(addr, &prefix);
@@ -219,7 +219,7 @@ add_range4(struct resources *resources, struct resources *parent,
 	int error;
 	enum resource_cmp_result result;
 
-	if (parent && (resources->ip4s == parent->ip4s))
+	if (parent && resources->ip4s && (resources->ip4s == parent->ip4s))
 		return pr_err("Certificate defines IPv4 ranges while also inheriting its parent's.");
 
 	error = range4_decode(input, &range);
@@ -267,7 +267,7 @@ add_range6(struct resources *resources, struct resources *parent,
 	int error;
 	enum resource_cmp_result result;
 
-	if (parent && (resources->ip6s == parent->ip6s))
+	if (parent && resources->ip6s && (resources->ip6s == parent->ip6s))
 		return pr_err("Certificate defines IPv6 ranges while also inheriting its parent's.");
 
 	error = range6_decode(input, &range);
@@ -472,7 +472,7 @@ add_asior(struct resources *resources, struct resources *parent,
 	struct asn_range asns;
 	int error;
 
-	if (parent && (resources->asns == parent->asns))
+	if (parent && resources->asns && (resources->asns == parent->asns))
 		return pr_err("Certificate defines ASN resources while also inheriting its parent's.");
 
 	switch (obj->present) {
