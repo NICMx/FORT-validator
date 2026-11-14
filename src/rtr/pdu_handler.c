@@ -383,6 +383,27 @@ add_withdrawal(struct withdrawal_array *wds, unsigned char const *chunk, size_t 
 	memcpy(wds->a[wds->n++].raw, chunk, size);
 }
 
+/*
+ * Compares two raw VRPs (AS, prefix, length, max length) the way cmp_vrp()
+ * does, because that is the order the serial files are written in.
+ */
+static int
+cmp_raw_vrp(unsigned char const *a, unsigned char const *b, size_t rawlen)
+{
+	int cmp;
+
+	cmp = memcmp(a + 4, b + 4, rawlen - 6); /* Prefix */
+	if (cmp)
+		return cmp;
+	cmp = (int)a[rawlen - 1] - (int)b[rawlen - 1]; /* Max length */
+	if (cmp)
+		return cmp;
+	cmp = (int)a[rawlen - 2] - (int)b[rawlen - 2]; /* Length */
+	if (cmp)
+		return cmp;
+	return memcmp(a, b, 4); /* AS */
+}
+
 static int
 send_pfx_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 {
@@ -419,7 +440,7 @@ send_pfx_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 		goto end;
 
 	while (ochunk && nchunk) {
-		cmp = memcmp(ochunk, nchunk, rs->rawlen);
+		cmp = cmp_raw_vrp(ochunk, nchunk, rs->rawlen);
 		if (cmp > 0) {
 			add_withdrawal(&wds, ochunk, rs->rawlen);
 			ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
