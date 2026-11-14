@@ -604,6 +604,70 @@ START_TEST(test_delta_forget)
 }
 END_TEST
 
+/*
+ * The serial files are in table order: prefix first, AS last (cmp_vrp()).
+ * Here the prefixes and the ASs sort in opposite directions, so the delta is
+ * only right if it walks the files in that same order.
+ */
+static void
+mock_order(struct db_table *tbl, bool both)
+{
+	add_v4(tbl, "192.0.2.0", 24, 24, 2);
+	add_v6(tbl, "2001:db8:1::", 48, 48, 2);
+	if (both) {
+		add_v4(tbl, "198.51.100.0", 24, 24, 1);
+		add_v6(tbl, "2001:db8:2::", 48, 48, 1);
+	}
+}
+
+START_TEST(test_delta_order)
+{
+	struct db_table *tbl;
+	uint16_t session;
+
+	pr_op_info("-- Delta Order --");
+
+	deltas_lifetime = 5;
+	if (file_exists("tmp/rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+
+	/* Serial 1: AS 2 alone */
+	tbl = db_table_create();
+	mock_order(tbl, false);
+	session = mock_commit(tbl) + RTR_V2;
+
+	/* Serial 2: AS 1 added; AS 2 did not change */
+	tbl = db_table_create();
+	mock_order(tbl, true);
+	mock_commit(tbl);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
+
+	/* Serial 3: AS 1 removed; AS 2 did not change */
+	tbl = db_table_create();
+	mock_order(tbl, false);
+	mock_commit(tbl);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 2);
+
+	/* Serials 1 and 3 hold the same records */
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
+}
+END_TEST
+
 /* https://tools.ietf.org/html/rfc8210#section-8.3 */
 START_TEST(test_no_incremental_update_available)
 {
@@ -659,6 +723,7 @@ pdu_suite(void)
 	core = tcase_create("RTR flows");
 	tcase_add_test(core, test_natural_flows);
 	tcase_add_test(core, test_delta_forget);
+	tcase_add_test(core, test_delta_order);
 	tcase_add_test(core, test_no_incremental_update_available);
 	tcase_add_test(core, test_cache_has_no_data_available);
 
