@@ -143,7 +143,7 @@ drop_privileges(void)
 		    strerror(error));
 		return error;
 	}
-	if (setuid(pwd->pw_gid) < 0) {
+	if (setuid(pwd->pw_uid) < 0) {
 		error = errno;
 		pr_err("Cannot switch to the 'fort' user: %s",
 		    strerror(error));
