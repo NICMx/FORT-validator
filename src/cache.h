@@ -49,10 +49,11 @@ struct cache_ta {
 
 validation_verdict cache_get_fallback(struct uri const *, struct rpp_querier *);
 
-struct rpp_querier *querier_create(struct extension_uris *);
+struct rpp_querier *querier_create(struct extension_uris *, bool);
 struct cache_file *querier_map(struct rpp_querier *, struct uri const *);
 void querier_get_fallback_mftnums(struct rpp_querier *,
     struct mft_meta const **, struct mft_meta const **);
+bool querier_is_fallback(struct rpp_querier *);
 validation_verdict querier_downgrade(struct rpp_querier *);
 void querier_free(struct rpp_querier *);
 

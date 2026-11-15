@@ -50,7 +50,7 @@ void cer_cleanup(struct rpki_certificate *);
 void cer_free(struct rpki_certificate *);
 
 validation_verdict cer_traverse(struct validation_thread *,
-    struct rpki_certificate *);
+    struct rpki_certificate *, bool);
 
 struct signed_object;
 int cer_validate_ee(struct rpki_certificate *, struct signed_object *);

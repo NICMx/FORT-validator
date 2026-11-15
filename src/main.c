@@ -61,7 +61,8 @@ claim_work(void *arg)
 
 		switch (task->type) {
 		case VTT_RPP:
-			vv = cer_traverse(vt, task->u.ca);
+			vv = cer_traverse(vt, task->u.rpp.ca,
+			    task->u.rpp.force_fallback);
 			if (vv == VV_BUSY) {
 				task_requeue_dormant(task);
 				task = NULL;

@@ -138,7 +138,7 @@ validate_ta(struct validation_thread *vt, struct tal *tal,
 	atomic_fetch_add(&tal->refcount, 1);
 	atomic_init(&ta->refcount, 1);
 
-	vv = cer_traverse(vt, ta);
+	vv = cer_traverse(vt, ta, false);
 
 	cer_free(ta);
 	return vv;

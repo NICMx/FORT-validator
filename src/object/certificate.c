@@ -2090,7 +2090,8 @@ end:	fnstack_pop();
 }
 
 validation_verdict
-cer_traverse(struct validation_thread *vt, struct rpki_certificate *ca)
+cer_traverse(struct validation_thread *vt, struct rpki_certificate *ca,
+    bool force_fallback)
 {
 	validation_verdict vv;
 	struct cache_file *mft;
@@ -2108,10 +2109,10 @@ cer_traverse(struct validation_thread *vt, struct rpki_certificate *ca)
 			return VV_CONTINUE;
 	} /* else "we already did this, and returned VV_BUSY" */
 
-	pr_trc("Certificate seems correct; downloading RPP.");
+	pr_trc("Certificate seems correct; checking RPP.");
 
 	if (!ca->querier)
-		ca->querier = querier_create(&ca->uris);
+		ca->querier = querier_create(&ca->uris, force_fallback);
 
 retry:	vv = querier_downgrade(ca->querier);
 	if (vv != VV_CONTINUE)
@@ -2128,10 +2129,12 @@ retry:	vv = querier_downgrade(ca->querier);
 		goto retry;
 
 	queued = 0;
+	force_fallback |= querier_is_fallback(ca->querier);
+
 	for (i = 0; i < ca->rpp.nfiles; i++) {
 		map = &ca->rpp.files[i]->map;
 		if (uri_has_extension(&map->url, ".cer"))
-			queued += task_enqueue_rpp(map, ca);
+			queued += task_enqueue_rpp(map, ca, force_fallback);
 		else if (uri_has_extension(&map->url, ".roa"))
 			roa_traverse(vt, map, ca);
 		else if (uri_has_extension(&map->url, ".asa"))

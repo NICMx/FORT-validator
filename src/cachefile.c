@@ -365,7 +365,7 @@ filerefs2json(struct files_ht *refs)
 }
 
 static struct cache_file_ref *
-find_file(struct files_ht *ht, char const *key)
+find_fileref(struct files_ht *ht, char const *key)
 {
 	size_t keylen;
 	struct cache_file_ref *file;
@@ -400,7 +400,7 @@ json2filerefs(json_t *parent, char const *name, struct files_ht *src_ht,
 		}
 
 		key = json_string_value(jfr);
-		src = find_file(src_ht, key);
+		src = find_fileref(src_ht, key);
 		if (!src) {
 			error = -pr_err("'%s' is not a defined file.", key);
 			goto oops;
@@ -645,7 +645,7 @@ load_mft_file(json_t *jmft, struct files_ht *refs, struct cache_file **result)
 	if (error)
 		return error;
 
-	ref = find_file(refs, str);
+	ref = find_fileref(refs, str);
 	if (!ref)
 		return -pr_err("Manifest file is not declared: %s", str);
 

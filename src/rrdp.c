@@ -549,6 +549,32 @@ rrdpdao_create(struct rrdp_ctx *ctx, struct uri const *rpkiManifest)
 	return result;
 }
 
+static struct cache_file *
+find_file(struct files_ht *ht, struct uri const *url)
+{
+	struct cache_file_ref *ref;
+	ref = filerefs_find_uri(ht, url);
+	return ref ? ref->file : NULL;
+}
+
+static bool
+step_is_fallback(struct rrdp_dao *dao, struct rrdp_step *step)
+{
+	struct cache_file *step_file, *fb_file;
+
+	if (!dao->fb.obj)
+		return false;
+
+	step_file = find_file(&step->files, &dao->rpkiManifest);
+	fb_file = find_file(&dao->fb.obj->files, &dao->rpkiManifest);
+
+	if (step_file == fb_file)
+		return true;
+	if (!step_file || !fb_file)
+		return false;
+	return strcmp(step_file->map.path, fb_file->map.path) == 0;
+}
+
 /* This function assumes querier's sessions are sorted by date, fresh first */
 struct rrdp_serial *
 rrdpdao_downgrade_delta(struct rrdp_dao *dao)
@@ -579,7 +605,10 @@ rrdpdao_downgrade_delta(struct rrdp_dao *dao)
 no:	pr_trc("There are no more RRDP sessions/steps.");
 	return NULL;
 
-yes:	dao->state = RDS_STEP;
+yes:	if (step_is_fallback(dao, step))
+		goto no;
+
+	dao->state = RDS_STEP;
 	dao->step.session = ss;
 	dao->step.obj = step;
 	return &step->serial;
@@ -603,7 +632,6 @@ struct cache_file *
 rrdpdao_map(struct rrdp_dao const *querier, struct uri const *url)
 {
 	struct files_ht *ht = NULL;
-	struct cache_file_ref *ref;
 
 	switch (querier->state) {
 	case RDS_STEP:
@@ -620,8 +648,7 @@ rrdpdao_map(struct rrdp_dao const *querier, struct uri const *url)
 		return NULL;
 	}
 
-	ref = filerefs_find_uri(ht, url);
-	return ref ? ref->file : NULL;
+	return find_file(ht, url);
 }
 
 struct mft_meta const *

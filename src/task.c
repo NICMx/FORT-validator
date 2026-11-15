@@ -27,7 +27,7 @@ task_name(struct validation_task *task)
 {
 	switch (task->type) {
 	case VTT_RPP:
-		return uri_str(&task->u.ca->map.url);
+		return uri_str(&task->u.rpp.ca->map.url);
 	case VTT_TAL:
 		return task->u.tal;
 	}
@@ -41,7 +41,7 @@ task_free(struct validation_task *task)
 {
 	switch (task->type) {
 	case VTT_RPP:
-		cer_free(task->u.ca);
+		cer_free(task->u.rpp.ca);
 		break;
 	case VTT_TAL:
 		free(task->u.tal);
@@ -163,7 +163,7 @@ task_enqueue_tal(char const *tal_path)
  */
 unsigned int
 task_enqueue_rpp(struct cache_mapping const *map,
-    struct rpki_certificate *parent)
+    struct rpki_certificate *parent, bool force_fallback)
 {
 	struct validation_task *task;
 	struct rpki_certificate *ca;
@@ -178,7 +178,11 @@ task_enqueue_rpp(struct cache_mapping const *map,
 
 	task = pmalloc(sizeof(struct validation_task));
 	task->type = VTT_RPP;
-	task->u.ca = ca;
+	task->u.rpp.ca = ca;
+	task->u.rpp.force_fallback = force_fallback;
+
+	if (force_fallback)
+		pr_trc("Fallbackness inherited.");
 
 	return enqueue_task(task);
 }

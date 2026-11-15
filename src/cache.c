@@ -71,6 +71,7 @@ struct cache_node {
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
 #define CNF_REJECTED (1 << 0)	/* This node needs to be deleted */
+#define CNF_TRAVERSED (1 << 1)
 	int flags;
 
 	struct {
@@ -139,6 +140,7 @@ enum rpp_querier_status {
 
 struct rpp_querier {
 	enum rpp_querier_status status;
+	bool force_fallback;
 
 	struct rrdp_dao *rrdp;
 	struct rsync_dao *rsync;
@@ -789,8 +791,12 @@ provide_node(struct cache_table *tbl, struct uri const *url,
 	struct cache_node *node;
 
 	node = find_node(tbl, url);
-	if (node)
-		return (node->ctx.type == ctx_type) ? node : NULL;
+	if (node) {
+		if (node->ctx.type != ctx_type)
+			return NULL;
+		node->flags |= CNF_TRAVERSED;
+		return node;
+	}
 	if (!tbl->enabled)
 		return NULL;
 
@@ -802,6 +808,7 @@ provide_node(struct cache_table *tbl, struct uri const *url,
 		free(node);
 		return NULL;
 	}
+	node->flags |= CNF_TRAVERSED;
 	node->ctx.type = ctx_type;
 
 	url = &node->map.url;
@@ -883,8 +890,8 @@ rsync_post_process(struct cache_node *node)
  * @result belongs to the database; don't free it.
  */
 static validation_verdict
-do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
-    dl_cb dl, struct cache_node **result)
+do_refresh(struct cache_table *tbl, struct uri const *uri,
+    bool single, dl_cb dl, struct cache_node **result)
 {
 	struct uri module;
 	struct cache_node *node;
@@ -975,7 +982,90 @@ ongoing:	mutex_unlock(&tbl->lock);
 	return VV_CONTINUE;
 }
 
-/* XXX Fallback only if parent is fallback */
+static struct cache_node *
+do_not_refresh(struct cache_table *tbl, struct uri const *uri)
+{
+	struct uri module;
+	struct uri const *key;
+	enum context_type ct;
+	struct cache_node *node;
+
+	if (tbl == &cache.rsync) {
+		if (!get_rsync_module(uri, &module))
+			return NULL;
+		key = &module;
+		ct = CT_RSYNC;
+	} else {
+		key = uri;
+		ct = CT_RRDP;
+	}
+
+	mutex_lock(&tbl->lock);
+	node = provide_node(tbl, key, ct);
+	mutex_unlock(&tbl->lock);
+	return node;
+}
+
+static bool
+sm_offline_rrdp(struct rpp_querier *dao)
+{
+	struct cache_node *node;
+
+	if (uri_str(&dao->uris->rpkiNotify) == NULL)
+		return false;
+
+	node = do_not_refresh(&cache.https, &dao->uris->rpkiNotify);
+	if (!node || !node->ctx.v.rrdp)
+		return false;
+
+	dao->rrdp = rrdpdao_create(node->ctx.v.rrdp, &dao->uris->rpkiManifest);
+	if (!rrdpdao_downgrade_fb(dao->rrdp))
+		return false;
+
+	pr_trc("Validating RRDP fallback.");
+	dao->status = CS_RRDP_FALLBACK;
+	return true;
+}
+
+static bool
+sm_offline_rsync(struct rpp_querier *dao)
+{
+	struct cache_node *node;
+
+	node = do_not_refresh(&cache.rsync, &dao->uris->caRepository);
+	if (!node || !node->ctx.v.rsync)
+		return false;
+
+	dao->rsync = rsyncdao_create(node->ctx.v.rsync,
+	    &dao->uris->rpkiManifest);
+	if (!rsyncdao_downgrade(dao->rsync))
+		return false;
+
+	pr_trc("Validating rsync fallback.");
+	dao->status = CS_RSYNC_FALLBACK;
+	return true;
+}
+
+static validation_verdict
+offline_state_machine(struct rpp_querier *dao)
+{
+	switch (dao->status) {
+	case CS_START:
+	case CS_RRDP_FALLBACK:
+		if (sm_offline_rrdp(dao))
+			return VV_CONTINUE;
+		/* No break */
+	case CS_RSYNC_FALLBACK:
+		if (sm_offline_rsync(dao))
+			return VV_CONTINUE;
+		/* No break */
+	default:
+		break;
+	}
+
+	dao->status = CS_FAIL;
+	return VV_FAIL;
+}
 
 validation_verdict
 querier_downgrade(struct rpp_querier *dao)
@@ -983,6 +1073,9 @@ querier_downgrade(struct rpp_querier *dao)
 	struct cache_node *node;
 	struct rrdp_serial *serial;
 	validation_verdict vv;
+
+	if (dao->force_fallback)
+		return offline_state_machine(dao);
 
 	switch (dao->status) {
 	case CS_START:
@@ -1056,12 +1149,13 @@ querier_downgrade(struct rpp_querier *dao)
 }
 
 struct rpp_querier *
-querier_create(struct extension_uris *uris)
+querier_create(struct extension_uris *uris, bool force_fallback)
 {
 	struct rpp_querier *querier;
 
 	querier = pzalloc(sizeof(struct rpp_querier));
 	querier->status = CS_START;
+	querier->force_fallback = force_fallback;
 	querier->uris = uris;
 
 	return querier;
@@ -1105,6 +1199,13 @@ querier_get_fallback_mftnums(struct rpp_querier *querier,
 {
 	*rrdp = rrdpdao_fallback_mftnum(querier->rrdp);
 	*rsync = rsyncdao_fallback_mftnum(querier->rsync);
+}
+
+bool
+querier_is_fallback(struct rpp_querier *querier)
+{
+	return querier->status == CS_RRDP_FALLBACK
+	    || querier->status == CS_RSYNC_FALLBACK;
 }
 
 void
@@ -1373,7 +1474,7 @@ clean_orphaned_cages(struct cache_table *tbl)
 
 		HASH_ITER(hh, tbl->nodes, node, tmpn)
 			if (strcmp(path, node->map.path) == 0) {
-				cage->has_node = (node->state == DLS_FRESH);
+				cage->has_node = (node->flags & CNF_TRAVERSED);
 				break;
 			}
 
@@ -1430,7 +1531,6 @@ void
 cache_commit(void)
 {
 	pr_trc("============ Committing cache ============");
-	cache_print();
 	cleanup_cache();
 	file_write_txt(METAFILE, "{ \"fort-version\": \"" PACKAGE_VERSION "\" }");
 	flush_nodes();

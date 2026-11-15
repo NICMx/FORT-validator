@@ -26,7 +26,7 @@ queue_1(char *mapstr)
 
 	__URI_INIT(&map.url, mapstr);
 	map.path = mapstr;
-	ck_assert_int_eq(1, task_enqueue_rpp(&map, &parent));
+	ck_assert_int_eq(1, task_enqueue_rpp(&map, &parent, false));
 }
 
 static struct validation_task *
@@ -34,7 +34,7 @@ dequeue_1(char *mapstr, struct validation_task *prev)
 {
 	struct validation_task *task;
 	task = task_dequeue(prev);
-	ck_assert_uri(mapstr, &task->u.ca->map.url);
+	ck_assert_uri(mapstr, &task->u.rpp.ca->map.url);
 	return task;
 }
 
@@ -209,7 +209,7 @@ user_thread(void *arg)
 		printf("- th%d: Dequeued '%s'\n", thid, task_name(task));
 		total_dequeued++;
 
-		if (certificate_traverse_mock(task->u.ca, thid) == EBUSY) {
+		if (certificate_traverse_mock(task->u.rpp.ca, thid) == EBUSY) {
 			printf("+ th%d: Requeuing '%s'\n", thid, task_name(task));
 			task_requeue_dormant(task);
 			task = NULL;
