@@ -319,22 +319,6 @@ ext2ft(IA5String_t *file)
 	return FT_UNK;
 }
 
-/*
- * XXX
- *
- * revoked manifest: 6.6
- * CRL not in fileList: 6.6
- * fileList file in different folder: 6.6
- * manifest is identified by id-ad-rpkiManifest. (A directory will have more
- * than 1 on rollover.)
- * id-ad-rpkiManifest not found: 6.6
- * invalid manifest: 6.6
- * stale manifest: 6.6
- * fileList file not found: 6.6
- * bad hash: 6.6
- * 6.6: warning, fallback to previous version. Children inherit this.
- */
-
 static int
 collect_files(struct cache_mapping const *map,
     struct Manifest *mft, struct rpp_querier *querier,
