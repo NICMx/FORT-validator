@@ -263,6 +263,33 @@ send_aspa_withdraw_pdu(int fd, uint8_t version, uint32_t customer)
 	return send_response(fd, type, data, 12);
 }
 
+static uint32_t
+get_refresh(void)
+{
+	uint32_t refresh;
+
+	refresh = 3 * fortcfg.interval / 2;
+	if (refresh >= fortcfg.rtr.expire)
+		refresh = fortcfg.rtr.expire / 2;
+	if (refresh > 86400)
+		refresh = 86400;
+
+	return refresh;
+
+}
+
+static uint32_t
+get_retry(void)
+{
+	uint32_t retry;
+
+	retry = 600;
+	if (retry >= fortcfg.rtr.expire)
+		retry = fortcfg.rtr.expire / 2;
+
+	return retry;
+}
+
 #define MAX(a, b) ((a > b) ? a : b)
 
 int
@@ -288,8 +315,8 @@ send_end_of_data_pdu(int fd, uint8_t version, uint16_t session, serial_t serial)
 		len = RTRPDU_END_OF_DATA_V1_LEN;
 		buf = serialize_hdr(data, version, type, session, len);
 		buf = write_uint32(buf, serial);
-		buf = write_uint32(buf, 3600); /* XXX */
-		buf = write_uint32(buf, 600); /* XXX */
+		buf = write_uint32(buf, get_refresh());
+		buf = write_uint32(buf, get_retry());
 		buf = write_uint32(buf, fortcfg.rtr.expire);
 		break;
 	default:

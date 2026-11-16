@@ -72,6 +72,10 @@ check_PROGRAMS +=		pdu_handler.test
 pdu_handler_test_SOURCES =	rtr/pdu_handler_test.c
 pdu_handler_test_LDADD =	${CHECK_LIBS} ${JANSSON_LIBS}
 
+check_PROGRAMS +=		pdu_sender.test
+pdu_sender_test_SOURCES =	rtr/pdu_sender_test.c
+pdu_sender_test_LDADD =		${CHECK_LIBS}
+
 check_PROGRAMS +=		pdu_stream.test
 pdu_stream_test_SOURCES =	rtr/pdu_stream_test.c
 pdu_stream_test_LDADD =		${CHECK_LIBS} ${JANSSON_LIBS}

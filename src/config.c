@@ -23,6 +23,28 @@
 #include "types/array.h"
 #include "types/path.h"
 
+/*
+ * RFC 6810 and 8210:
+ * "The cache MUST rate-limit Serial Notifies to no more frequently than one per
+ * minute."
+ * We do this by not getting new information more than once per minute.
+ */
+#define VALIDATION_INTERVAL_MIN 60
+/*
+ * 7 days.
+ * The interval must not overflow when multiplied by server.deltas.lifetime.
+ */
+#define VALIDATION_INTERVAL_MAX 604800
+#define VALIDATION_INTERVAL_DEFAULT 3600
+/*
+ * RFC 8210: "Interval during which data fetched from a cache remains valid in
+ * the absence of a successful subsequent cache poll"
+ * Min, max, and default values taken from RFC 8210 section 6.
+ */
+#define EXPIRE_MIN 600
+#define EXPIRE_MAX 172800
+#define EXPIRE_DEFAULT 7200
+
 static void print_usage(FILE *, bool);
 
 #define DECLARE_HANDLE_FN(name)						\
@@ -149,33 +171,16 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct fort_config, interval),
 		.doc = "Interval used to look for updates at VRPs location",
-		/*
-		 * RFC 6810 and 8210:
-		 * "The cache MUST rate-limit Serial Notifies to no more
-		 * frequently than one per minute."
-		 * We do this by not getting new information more than once per
-		 * minute.
-		 */
-		.min = 60,
-		/*
-		 * 7 days.
-		 * Must not overflow when multiplied by deltas.lifetime.
-		 */
-		.max = 604800,
+		.min = VALIDATION_INTERVAL_MIN,
+		.max = VALIDATION_INTERVAL_MAX,
 	}, {
 		.id = 5006,
 		.name = "server.interval.expire",
 		.type = &gt_uint,
 		.offset = offsetof(struct fort_config, rtr.expire),
 		.doc = "Interval during which data fetched from a cache remains valid in the absence of a successful subsequent cache poll",
-		/*
-		 * RFC 8210: "Interval during which data fetched from a cache
-		 * remains valid in the absence of a successful subsequent
-		 * cache poll"
-		 * Min, max, and default values taken from RFC 8210 section 6.
-		 */
-		.min = 600,
-		.max = 172800,
+		.min = EXPIRE_MIN,
+		.max = EXPIRE_MAX,
 	}, {
 		.id = 5007,
 		.name = "server.deltas.lifetime",
@@ -583,13 +588,13 @@ set_default_values(void)
 	fortcfg.cache = pstrdup("/tmp/fort/repository");
 	fortcfg.slurm = NULL;
 	fortcfg.mode = SERVER;
-	fortcfg.interval = 3600;
+	fortcfg.interval = VALIDATION_INTERVAL_DEFAULT;
 	fortcfg.daemon = false;
 
 	string_array_init(&fortcfg.rtr.address, addrs, ARRAY_LEN(addrs));
 	fortcfg.rtr.port = pstrdup("323");
 	fortcfg.rtr.backlog = SOMAXCONN;
-	fortcfg.rtr.expire = 7200;
+	fortcfg.rtr.expire = EXPIRE_DEFAULT;
 	fortcfg.rtr.deltas_lifetime = 6;
 	fortcfg.rtr.max_rtr_version = 0;
 
