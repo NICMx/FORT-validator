@@ -418,7 +418,7 @@ cseq_init(struct cache_sequence *seq, char const *prefix, unsigned long id,
 
 int
 json2cseq(struct cache_sequence *cseq, json_t *jfiles, char const *pfx,
-    bool is_rsync /* XXX hack */)
+    bool is_rsync)
 {
 	unsigned long max_id, id;
 	char const *key, *idstr;
