@@ -698,7 +698,6 @@ cleanup_sessions(struct rrdp_ctx *ctx)
 	for (session = TAILQ_FIRST(&ctx->sessions); session; session = tmps) {
 		tmps = TAILQ_NEXT(session, lh);
 
-		// XXX (!fresh || steps empty) ?
 		if (!session->fresh && HASH_COUNT(session->fbs.ht) == 0) {
 			TAILQ_REMOVE(&ctx->sessions, session, lh);
 			session_cleanup(session);
