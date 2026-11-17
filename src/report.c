@@ -7,6 +7,7 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
+#include "types/fnstack.h"
 
 static FILE *stream;	/* Constant during multithreaded */
 static bool enabled;
@@ -47,12 +48,17 @@ report_enabled(void)
 void
 report(char const *tag, char const *fmt, va_list vl)
 {
+	char const *filename;
+
 	if (!stream)
 		return;
 
+	filename = fnstack_peek();
+
 	mutex_lock(&lock);
 	fprintf(stream, "Severity: %s\n", tag);
-	fprintf(stream, "File: %s\n", ""); // XXX
+	if (filename)
+		fprintf(stream, "File: %s\n", filename);
 	vfprintf(stream, fmt, vl);
 	fprintf(stream, "\n\n");
 	mutex_unlock(&lock);
