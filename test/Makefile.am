@@ -92,6 +92,10 @@ rrdp_xml_test_LDADD =		${CHECK_LIBS} ${JANSSON_LIBS}
 #rsync_test_SOURCES =		rsync_test.c
 #rsync_test_LDADD =		${CHECK_LIBS}
 
+check_PROGRAMS +=		rtr.test
+rtr_test_SOURCES =		rtr/rtr_test.c
+rtr_test_LDADD =		${CHECK_LIBS}
+
 check_PROGRAMS +=		serial.test
 serial_test_SOURCES =		types/serial_test.c
 serial_test_LDADD =		${CHECK_LIBS}

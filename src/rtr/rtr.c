@@ -73,48 +73,50 @@ destroy_db(void)
 }
 
 /*
- * Extracts from @full_address ("IP#[port]") the address and port, and returns
- * them in @address and @service, respectively.
- *
- * The default port is fortcfg.rtr.port.
+ * Extracts from @full_address the address and port, and returns them in
+ * @address and @service, respectively.
  */
 static int
-parse_address(char const *full_address, char **address, char **service)
+parse_address(char const *in, char **address, char **service)
 {
-	char const *ptr;
-	char *tmp_addr;
-	char *tmp_serv;
-	size_t tmp_addr_len;
+	char const *bracket, *colon;
 
-	if (full_address == NULL) {
-		tmp_addr = NULL;
-		tmp_serv = pstrdup(fortcfg.rtr.port);
-		goto done;
+	if (in == NULL) {
+		*address = NULL;
+		goto default_port;
 	}
 
-	/* XXX why # */
-	ptr = strrchr(full_address, '#');
-	if (ptr == NULL) {
-		tmp_addr = pstrdup(full_address);
-		tmp_serv = pstrdup(fortcfg.rtr.port);
-		goto done;
+	if (in[0] == '[') {
+		bracket = strchr(in, ']');
+		if (!bracket)
+			return pr_err("Unterminated square bracket: %s", in);
+		*address = pstrndup(in + 1, bracket - in - 1);
+		if (bracket[1] == '\0')
+			goto default_port;
+		if (bracket[1] != ':') {
+			free(*address);
+			return pr_err("Unexpected character after ':': %s", in);
+		}
+		if (bracket[2] == '\0')
+			goto default_port;
+		*service = pstrdup(bracket + 2);
+		return 0;
 	}
 
-	if (*(ptr + 1) == '\0')
-		return pr_err("Invalid server address '%s', can't end with '#'",
-		    full_address);
+	colon = strchr(in, ':');
+	if (!colon || strchr(colon + 1, ':')) {
+		*address = pstrdup(in);
+		goto default_port;
+	}
 
-	tmp_addr_len = strlen(full_address) - strlen(ptr);
-	tmp_addr = pmalloc(tmp_addr_len + 1);
+	*address = pstrndup(in, colon - in);
+	if (colon[1] == '\0')
+		goto default_port;
+	*service = pstrdup(colon + 1);
+	return 0;
 
-	memcpy(tmp_addr, full_address, tmp_addr_len);
-	tmp_addr[tmp_addr_len] = '\0';
-
-	tmp_serv = pstrdup(ptr + 1);
-	/* Fall through */
-done:
-	*address = tmp_addr;
-	*service = tmp_serv;
+default_port:
+	*service = pstrdup(fortcfg.rtr.port);
 	return 0;
 }
 
@@ -135,7 +137,7 @@ init_addrinfo(char const *hostname, char const *service,
 
 	error = getaddrinfo(hostname, service, &hints, result);
 	if (error) {
-		pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
+		pr_err("[%s]:%s: Cannot infer bindable address: %s",
 		    (hostname != NULL) ? hostname : "any", service,
 		    gai_strerror(error));
 		return error;
@@ -305,9 +307,6 @@ init_server_fd(struct server_init_ctx *ctx)
 	char *address;
 	char *service;
 	int error;
-
-	address = NULL;
-	service = NULL;
 
 	error = parse_address(ctx->input_addr, &address, &service);
 	if (error)
