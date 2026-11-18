@@ -31,8 +31,8 @@ struct server_init_ctx {
 #endif
 };
 
-static pthread_t control_thread;
-static pthread_t *server_threads;
+static pthread_t poller_thread;
+static pthread_t *worker_threads;
 
 STATIC_ARRAY_LIST(server_arraylist, struct rtr_server)
 STATIC_ARRAY_LIST(client_arraylist, struct pdu_stream *)
@@ -220,8 +220,8 @@ set_nonblock(int fd)
 }
 
 /*
- * Creates the socket that will stay put and wait for new connections started
- * from the clients.
+ * Creates the socket (or sockets) that will stay put and wait for new
+ * connections started from the clients.
  */
 static int
 create_server_socket(struct server_init_ctx *ctx, char const *hostname, char const *port)
@@ -432,7 +432,7 @@ kick_client:			pr_trc("RTR worker thread: %s errored.",
 		} while (true);
 
 		if (write(worker2poller[1], &one, 1) < 0)
-			pr_wrn("Cannot wake up RTR server thread: %s",
+			pr_wrn("Cannot wake up RTR poller thread: %s",
 			    strerror(errno));
 	}
 
@@ -766,7 +766,7 @@ stop:
 }
 
 static void *
-control_cb(void *arg)
+poller_cb(void *arg)
 {
 	do {
 		switch (fddb_poll()) {
@@ -784,7 +784,7 @@ control_cb(void *arg)
 }
 
 static void
-end_server_threads(size_t count)
+end_worker_threads(size_t count)
 {
 	array_index i;
 	int error;
@@ -794,14 +794,14 @@ end_server_threads(size_t count)
 	mutex_unlock(&lock);
 
 	for (i = 0; i < count; i++) {
-		error = pthread_join(server_threads[i], NULL);
+		error = pthread_join(worker_threads[i], NULL);
 		if (error)
 			pr_wrn("pthread_join: %s", strerror(error));
-		pr_trc("Ended RTR server thread #%zu.", i + 1);
+		pr_trc("Joined RTR worker thread #%zu.", i + 1);
 	}
 
-	free(server_threads);
-	server_threads = NULL;
+	free(worker_threads);
+	worker_threads = NULL;
 }
 
 int
@@ -847,10 +847,10 @@ rtr_start(void)
 		goto cond;
 	}
 
-	server_threads = pcalloc(fortcfg.thread_pool.server.max,
+	worker_threads = pcalloc(fortcfg.thread_pool.server.max,
 	    sizeof(pthread_t));
 	for (i = 0; i < fortcfg.thread_pool.server.max; i++) {
-		error = pthread_create(&server_threads[i], NULL,
+		error = pthread_create(&worker_threads[i], NULL,
 		    handle_clients, NULL);
 		if (error) {
 			pr_crit("pthread_create() returned error %d: %s",
@@ -858,17 +858,17 @@ rtr_start(void)
 			goto threads;
 		}
 
-		pr_trc("Spawned RTR server thread #%zu.", i + 1);
+		pr_trc("Spawned RTR worker thread #%zu.", i + 1);
 	}
 
-	error = pthread_create(&control_thread, NULL, control_cb, NULL);
+	error = pthread_create(&poller_thread, NULL, poller_cb, NULL);
 	if (error)
 		goto threads;
 
 	return 0;
 
 threads:
-	end_server_threads(i);
+	end_worker_threads(i);
 	close(worker2poller[0]);
 	close(worker2poller[1]);
 cond:
@@ -883,9 +883,9 @@ rtr_stop(void)
 
 	fort_end = true;
 
-	end_server_threads(fortcfg.thread_pool.server.max);
+	end_worker_threads(fortcfg.thread_pool.server.max);
 
-	error = pthread_join(control_thread, NULL);
+	error = pthread_join(poller_thread, NULL);
 	if (error)
 		pr_err("pthread_join() failed: %s", strerror(error));
 
