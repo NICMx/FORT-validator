@@ -651,11 +651,6 @@ fddb_poll(void)
 	init_pollfd(&pollfds[servers.len + clients.len], worker2poller[0]);
 
 	error = poll(pollfds, servers.len + clients.len + 1, 1000);
-	/*
-	 * On Linux, SIGTERM is producing poll success, not EINTR.
-	 * XXX I don't know why this is. It contradicts documentation.
-	 * So check fort_end before error...
-	 */
 	if (fort_end)
 		goto stop;
 	if (error == 0)
