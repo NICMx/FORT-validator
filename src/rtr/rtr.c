@@ -42,6 +42,11 @@ static struct client_arraylist clients;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t poller2worker;
+/*
+ * This one is somewhat misnamed.
+ * It's meant as a mirror of poller2worker, but since all it does is wake up
+ * the poller, the main thread also uses it during rtr_stop().
+ */
 static int worker2poller[2];
 
 enum poll_verdict {
@@ -304,8 +309,8 @@ fail:
 static int
 init_server_fd(struct server_init_ctx *ctx)
 {
-	char *address;
-	char *service;
+	char *address = NULL;
+	char *service = NULL;
 	int error;
 
 	error = parse_address(ctx->input_addr, &address, &service);
@@ -381,11 +386,18 @@ handle_request(struct rtr_request *req)
 	return error;
 }
 
-static void *
-handle_clients(void *arg)
+static void
+wakeup_poller(void)
 {
 	static const unsigned char one = 1;
 
+	if (write(worker2poller[1], &one, 1) < 0)
+		pr_wrn("Cannot wake up RTR poller thread: %s", strerror(errno));
+}
+
+static void *
+handle_clients(void *arg)
+{
 	struct pdu_stream *client;
 	struct rtr_request_list reqs;
 	struct rtr_request *req;
@@ -431,9 +443,7 @@ kick_client:			pr_trc("RTR worker thread: %s errored.",
 					goto kick_client;
 		} while (true);
 
-		if (write(worker2poller[1], &one, 1) < 0)
-			pr_wrn("Cannot wake up RTR poller thread: %s",
-			    strerror(errno));
+		wakeup_poller();
 	}
 
 	mutex_unlock(&lock);
@@ -785,14 +795,16 @@ end_worker_threads(size_t count)
 	int error;
 
 	mutex_lock(&lock);
-	pthread_cond_broadcast(&poller2worker);
+	panic_on_fail(pthread_cond_broadcast(&poller2worker),
+	    "pthread_cond_broadcast");
 	mutex_unlock(&lock);
 
 	for (i = 0; i < count; i++) {
 		error = pthread_join(worker_threads[i], NULL);
 		if (error)
-			pr_wrn("pthread_join: %s", strerror(error));
-		pr_trc("Joined RTR worker thread #%zu.", i + 1);
+			pr_wrn("pthread_join(%zu): %s", i + 1, strerror(error));
+		else
+			pr_trc("Joined RTR worker thread #%zu.", i + 1);
 	}
 
 	free(worker_threads);
@@ -878,16 +890,18 @@ rtr_stop(void)
 
 	fort_end = true;
 
-	end_worker_threads(fortcfg.thread_pool.server.max);
-
+	wakeup_poller();
 	error = pthread_join(poller_thread, NULL);
 	if (error)
-		pr_err("pthread_join() failed: %s", strerror(error));
+		pr_err("pthread_join(poller) failed: %s", strerror(error));
+	else
+		pr_trc("Joined RTR poller thread.");
+
+	end_worker_threads(fortcfg.thread_pool.server.max);
 
 	if (worker2poller[0] != -1)
 		close(worker2poller[0]);
 	close(worker2poller[1]);
-
 	pthread_cond_destroy(&poller2worker);
 }
 
