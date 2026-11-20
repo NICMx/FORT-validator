@@ -914,7 +914,7 @@ rtr_notify(struct rtr_metadata *rtr)
 
 	ARRAYLIST_FOREACH(&clients, _client) {
 		client = *_client;
-		if (client->fd != -1)
+		if (client->fd != -1 && client->rtr_version != -1)
 			send_serial_notify_pdu(
 			    client->fd,
 			    client->rtr_version,
