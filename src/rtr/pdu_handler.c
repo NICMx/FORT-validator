@@ -73,10 +73,10 @@ send_vrp4(struct rtr_stream *rs, unsigned char const *raw, int flag)
 	struct vrp vrp;
 
 	vrp.addr_fam = AF_INET;
-	vrp.asn = read_u32(raw);
-	memcpy(&vrp.prefix.v4, raw + 4, 4);
-	vrp.prefix_length = raw[8];
-	vrp.max_prefix_length = raw[9];
+	memcpy(&vrp.prefix.v4, raw, 4);
+	vrp.max_prefix_length = raw[4];
+	vrp.prefix_length = raw[5];
+	vrp.asn = read_u32(raw + 6);
 
 	return send_prefix_pdu(rs->fd, rs->ver, &vrp, flag);
 }
@@ -87,10 +87,10 @@ send_vrp6(struct rtr_stream *rs, unsigned char const *raw, int flag)
 	struct vrp vrp;
 
 	vrp.addr_fam = AF_INET6;
-	vrp.asn = read_u32(raw);
-	memcpy(&vrp.prefix.v6, raw + 4, 16);
-	vrp.prefix_length = raw[20];
-	vrp.max_prefix_length = raw[21];
+	memcpy(&vrp.prefix.v6, raw, 16);
+	vrp.max_prefix_length = raw[16];
+	vrp.prefix_length = raw[17];
+	vrp.asn = read_u32(raw + 18);
 
 	return send_prefix_pdu(rs->fd, rs->ver, &vrp, flag);
 }

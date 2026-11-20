@@ -304,6 +304,12 @@ cmp_vrp(struct hashable_vrp *_a, struct hashable_vrp *_b)
 	struct vrp *b = &_b->data;
 	int cmp;
 
+	/*
+	 * Caution: Needs to be the same order as in
+	 * - 8210bis#section-11.2.1, updt = 1
+	 * - cache_vrps()
+	 */
+
 	cmp = cmp_u8(a->addr_fam, b->addr_fam);
 	if (cmp) return cmp;
 
@@ -411,13 +417,18 @@ cache_vrps(struct vp_table *table, serial_t serial)
 		default:       continue;
 		}
 
-		if ((err = write_u32(file, vrp->asn)) != 0)
-			goto end;
+		/*
+		 * Caution: Needs to be the same order as in
+		 * - 8210bis#section-11.2.1, updt = 1
+		 * - cmp_vrp()
+		 */
 		if ((err = write_addr(file, vrp)) != 0)
+			goto end;
+		if ((err = write_u8(file, vrp->max_prefix_length)) != 0)
 			goto end;
 		if ((err = write_u8(file, vrp->prefix_length)) != 0)
 			goto end;
-		if ((err = write_u8(file, vrp->max_prefix_length)) != 0)
+		if ((err = write_u32(file, vrp->asn)) != 0)
 			goto end;
 	}
 
@@ -490,6 +501,7 @@ cache_metadata(struct vp_table *table)
 	return error;
 }
 
+/* "Cache" is meant as a verb. Stores the table in the cache. */
 int
 vpt_cache(struct vp_table *table)
 {
